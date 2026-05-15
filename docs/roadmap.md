@@ -82,6 +82,6 @@ Four tracks run concurrently from week 2 onward:
 
 ## Tracking
 
-- Backlog and weekly assignments live in **Notion**
+- Backlog and weekly assignments live in [Notion](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3)
 - Issues and PRs live in **GitHub**: https://github.com/naratech-eng/Email-Security-Pipeline
 - Documentation lives in **GitBook**, sourced from `/docs/` in the repo

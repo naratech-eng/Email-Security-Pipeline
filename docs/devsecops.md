@@ -85,7 +85,7 @@ Amplify handles preview environments per PR for the dashboard automatically.
 
 ## 9. Risk Register
 
-Lives in Notion (Issues & Blockers DB) and the [Threat Model](threat-model.md). Each high-severity item must have an owner and a target resolution date.
+Lives in [Notion workspace](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3) (Issues & Blockers DB) and the [Threat Model](threat-model.md). Each high-severity item must have an owner and a target resolution date.
 
 ## 10. Compliance Posture
 

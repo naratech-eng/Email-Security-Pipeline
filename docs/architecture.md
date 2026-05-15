@@ -284,6 +284,7 @@ See the full [Threat Model](threat-model.md). High-level controls in the AWS top
 - **Tracing:** AWS X-Ray on FastAPI (optional)
 - **Alarms:** PagerDuty/email on 5xx > 1% or latency p95 > 2s
 - **Detection records:** every scoring call is recorded in RDS with `source` (`upload` | `server`), score, top features, and timestamp
+- **Project tracking:** backlog and milestone tracking live in the [Notion workspace](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3)
 
 ---
 
@@ -319,4 +320,4 @@ The capstone targets light load. The architecture scales linearly:
 | Observability | CloudWatch Logs/Metrics/Alarms, X-Ray (optional) |
 | Audit | CloudTrail, AWS Config |
 | Docs | GitBook (this site) |
-| Project mgmt | Notion + GitHub Issues |
+| Project mgmt | [Notion workspace](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3) + GitHub Issues |

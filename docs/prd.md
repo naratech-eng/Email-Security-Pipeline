@@ -78,7 +78,7 @@ Phishing emails and malicious URLs remain a leading initial-access vector for cr
 - Terraform modules for all infrastructure
 - GitHub Actions CI/CD with security scanning gates
 - Logging, metrics, alarms, and DevSecOps controls
-- Documentation site (this GitBook), Notion workspace, GitHub repo
+- Documentation site (this GitBook), [Notion workspace](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3), GitHub repo
 
 ### Out of scope
 - Outbound mail filtering, DLP, encryption-at-rest beyond defaults
@@ -125,4 +125,5 @@ Phishing emails and malicious URLs remain a leading initial-access vector for cr
 
 - Course handbook & milestone guide (`milestone-guide.md`)
 - Project brief (`project-details.md`)
+- Notion workspace: https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3
 - Repo: https://github.com/naratech-eng/Email-Security-Pipeline

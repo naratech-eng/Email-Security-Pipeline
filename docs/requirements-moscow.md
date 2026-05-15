@@ -77,4 +77,4 @@ Prioritization framework for the Email Security Pipeline. Each requirement is ma
 Each Must/Should item should be referenced in:
 - The matching milestone deliverable
 - A test case in the [Test Plan](test-plan.md)
-- A dashboard / Notion task entry
+- A dashboard / [Notion task entry](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3)
