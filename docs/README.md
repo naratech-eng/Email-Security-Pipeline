@@ -40,5 +40,3 @@ Phishing remains one of the most common entry points for serious security incide
 
 CYT300 Capstone — deliverables are split into 10 milestones across a Research phase and a Deployment phase. See the [Roadmap](roadmap.md) for the milestone-to-week mapping.
 
-
-KLaras content.

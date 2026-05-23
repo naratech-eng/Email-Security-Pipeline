@@ -141,3 +141,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+
+# Project files
+Project_Details.pdf
+milestone-guide.md
+project-details.md
+sample_notion.md
