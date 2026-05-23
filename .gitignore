@@ -148,3 +148,6 @@ Project_Details.pdf
 milestone-guide.md
 project-details.md
 sample_notion.md
+
+# Project data (uploaded to S3)
+data/

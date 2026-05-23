@@ -12,6 +12,7 @@
 
 * [Architecture](architecture.md)
 * [Infrastructure (Terraform)](infrastructure-terraform.md)
+* [S3 Access Guide](s3-access-guide.md)
 * [DevSecOps](devsecops.md)
 * [Threat Model](threat-model.md)
 * [Test Plan](test-plan.md)
