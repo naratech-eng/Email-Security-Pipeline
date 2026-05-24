@@ -178,6 +178,8 @@ The following links are currently public for short-term team sharing:
 
 ⚠️ **Temporary exposure notice:** After the team downloads and saves local copies, remove public bucket policy access and re-enable S3 Block Public Access.
 
+**Important:** If you have setup default credentials, you can skip the `--profile email-security` flag.
+
 ### Upload Files
 
 ```bash
