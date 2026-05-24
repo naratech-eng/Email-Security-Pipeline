@@ -101,6 +101,51 @@ aws s3 ls s3://email-security-pipeline-datasets --profile email-security
 aws s3 cp local-file.csv s3://email-security-pipeline-datasets/ --profile email-security
 ```
 
+## Team Member Quick Start
+
+Each team member should follow these steps to access the S3 bucket:
+
+### 1. Configure AWS CLI (one-time setup)
+
+```bash
+aws configure --profile email-security
+```
+
+When prompted, enter:
+- AWS Access Key ID: your assigned key (see Google Doc)
+- AWS Secret Access Key: your assigned secret (see Google Doc)
+- Default region name: `us-east-1`
+- Default output format: `json`
+
+### 2. Verify access
+
+```bash
+aws s3 ls s3://email-security-pipeline-datasets --recursive --profile email-security
+```
+
+### 3. Download datasets
+
+```bash
+# Download phishing dataset
+aws s3 cp s3://email-security-pipeline-datasets/datasets/phishing/phishing_email.csv ./phishing_email.csv --profile email-security
+
+# Download malicious URLs (Kaggle)
+aws s3 cp s3://email-security-pipeline-datasets/datasets/urls/malicious_phish.csv ./malicious_phish.csv --profile email-security
+
+# Download URLhaus
+aws s3 cp s3://email-security-pipeline-datasets/datasets/urls/urlhaus-latest.csv ./urlhaus-latest.csv --profile email-security
+```
+
+### 4. Upload data
+
+```bash
+# Upload single file
+aws s3 cp local-file.csv s3://email-security-pipeline-datasets/datasets/ --profile email-security
+
+# Upload directory
+aws s3 sync ./local-datasets s3://email-security-pipeline-datasets/datasets/ --profile email-security
+```
+
 ## S3 Operations
 
 ## Dataset Links (Milestone 2)
