@@ -17,4 +17,4 @@ Dataset containing phishing and legitimate email samples used for phishing email
 
 “Phishing Emails Dataset.” Kaggle,
 https://www.kaggle.com/datasets/subhajournal/phishingemails.
-Accessed 23 May 2026.
+Accessed 23 May 2026. 
