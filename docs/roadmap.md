@@ -21,11 +21,12 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
 
 ### M3 — AWS Foundation + Email Server (Rocky Linux on EC2)
 - Deliverables:
-  - Terraform modules for VPC, ECS skeleton, RDS, S3, ECR, Cognito
+  - Existing AWS baseline from M2 reviewed and reused, especially IAM and the datasets S3 bucket
+  - Terraform codifies or extends the required AWS foundation for later milestones
   - Rocky Linux 9 EC2 instance running Postfix + Dovecot
   - Setup runbook in `docs/`
-  - Budget alerts and MFA configured
-- Exit: `terraform apply` produces a working VPC + EC2 mail server; test emails flow between two local accounts
+  - Budget alerts and MFA confirmed for the active AWS account
+- Exit: Terraform can reproduce or extend the agreed infra baseline, and the Rocky Linux mail server successfully sends and receives test emails between two local accounts
 
 ### M4 — Data Preprocessing
 - Deliverables: Preprocessing pipeline, processed dataset, feature documentation
@@ -61,7 +62,7 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
 | Week | Milestones | Parallel tracks |
 |---|---|---|
 | 1 | M1 | Form team, scope, research |
-| 2 | M2 + M3 (start) | Datasets in S3 • AWS account + Terraform skeleton |
+| 2 | M2 + M3 (start) | Datasets in S3 • AWS baseline established • Terraform scaffold starts |
 | 3 | M3 (finish) + M4 + M5 | EC2 mail server up • preprocessing • model selection • dashboard skeleton scaffolded |
 | 4–5 | M6 + M7 Phase A | Train models • deploy FastAPI to ECS • dashboard upload tool live |
 | 5–6 | M7 Phase B | Postfix `content_filter` integrated; detections from both modes flow to RDS + dashboard |

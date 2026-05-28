@@ -4,6 +4,8 @@
 
 This guide documents the S3 bucket setup for the Email Security Pipeline project and how team members can access it for dataset storage and retrieval.
 
+The AWS and S3 baseline in this guide was established in M2 and is reused by later milestones. Follow-on infrastructure work should extend or codify this setup rather than recreate it from scratch.
+
 ## AWS Resources Created
 
 ### S3 Bucket
@@ -184,7 +186,7 @@ The following links are currently public for short-term team sharing:
 
 ```bash
 # Upload single file
-aws s3 cp phishing_emails.csv s3://email-security-pipeline-datasets/datasets/phishing/ --profile email-security
+aws s3 cp phishing_email.csv s3://email-security-pipeline-datasets/datasets/phishing/ --profile email-security
 
 # Upload directory
 aws s3 sync ./local-datasets s3://email-security-pipeline-datasets/datasets/ --profile email-security
@@ -194,7 +196,7 @@ aws s3 sync ./local-datasets s3://email-security-pipeline-datasets/datasets/ --p
 
 ```bash
 # Download single file
-aws s3 cp s3://email-security-pipeline-datasets/datasets/phishing/phishing_emails.csv ./local-file.csv --profile email-security
+aws s3 cp s3://email-security-pipeline-datasets/datasets/phishing/phishing_email.csv ./local-file.csv --profile email-security
 
 # Download directory
 aws s3 sync s3://email-security-pipeline-datasets/datasets/ ./local-datasets --profile email-security
@@ -237,13 +239,10 @@ Recommended folder structure for the bucket:
 email-security-pipeline-datasets/
 ├── datasets/
 │   ├── phishing/
-│   │   ├── phishing_emails.csv
-│   │   └── phishing_emails_cleaned.csv
+│   │   └── phishing_email.csv
 │   ├── urls/
-│   │   ├── malicious_urls.csv
-│   │   └── legitimate_urls.csv
-│   └── combined/
-│       └── training_data.csv
+│   │   ├── malicious_phish.csv
+│   │   └── urlhaus-latest.csv
 ├── processed/
 │   ├── features/
 │   └── models/

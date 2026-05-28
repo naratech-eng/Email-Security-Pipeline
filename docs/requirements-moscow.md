@@ -15,8 +15,8 @@ Prioritization framework for the Email Security Pipeline. Each requirement is ma
 
 | ID | Requirement | Milestone |
 |---|---|---|
-| M-01 | AWS account configured with VPC, IAM, budget alerts, MFA on root | M3 |
-| M-02 | Terraform modules provision VPC, ECS, ALB, RDS, S3, ECR, Cognito | M3 |
+| M-01 | AWS baseline reviewed and extended as needed, with budget alerts and MFA confirmed on the active account | M2–M3 |
+| M-02 | Terraform codifies or provisions VPC, ECS, ALB, RDS, S3, ECR, and Cognito required for the target architecture | M3 |
 | M-03 | Rocky Linux 9 EC2 instance running Postfix + Dovecot, reachable on port 25 | M3 |
 | M-04 | At least one phishing email dataset and one legitimate email dataset imported and stored in S3 | M2 |
 | M-05 | Data preprocessing pipeline produces a clean, labeled feature dataset | M4 |
