@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Dataset files
+*.zip
+*.7z
+*.tar.gz
+
+# Large raw datasets
+data/raw/**/*.csv
+
+# Virtual environments
+venv/
+.env
