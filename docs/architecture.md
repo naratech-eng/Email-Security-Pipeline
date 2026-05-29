@@ -217,21 +217,30 @@ flowchart TB
 ### Deployment notes
 
 - **VPC layout:** 2 AZs minimum, public subnets for the mail server and ALBs, private subnets for ECS and RDS, NAT for egress.
-- **Mail server on EC2:** Rocky Linux 9 AMI (CentOS-compatible successor). Elastic IP for stable MX record. Outbound port 25 via Elastic IP only — request AWS to remove the default port 25 throttling if outbound is needed for testing.
+- **Mail server on EC2:** Rocky Linux 9 AMI. Auto-assigned public IP (no EIP). MX record for `mail.naratech.xyz` must be updated in Route53 when the instance is restarted. Request AWS to lift the default port 25 throttle if outbound SMTP is needed for testing.
 - **ECS Fargate:** stateless, auto-scales on CPU + request count. Health check on `/health`. Task role has read-only access to the model bucket and read on Secrets Manager paths it needs.
 - **RDS Postgres:** start with `db.t4g.micro`, single-AZ for cost, snapshot daily. Move to Multi-AZ for the demo if budget allows.
-- **Amplify:** connected to the GitHub repo, branch-based environments (`main` → prod, PR previews enabled).
-- **Public access:** the dashboard is the only publicly-reachable HTTP path besides the mail server's port 25.
+- **Amplify:** connected to the GitHub repo, branch-based environments (`main` → prod, PR previews enabled). Custom domain: `esp.naratech.xyz` (set in Amplify console).
+- **Public access:** the dashboard (`esp.naratech.xyz` via Amplify) and the inference API (`esp-api.naratech.xyz` via public ALB) are the only publicly-reachable HTTP endpoints besides the mail server's port 25.
 - **Internal traffic:** ECS pulls images via VPC endpoints to ECR, secrets via VPC endpoint to Secrets Manager, no NAT cost for AWS API calls.
+
+### Domain Layout
+
+| Subdomain | Service | Managed by |
+|---|---|---|
+| `esp.naratech.xyz` | Operator dashboard (React/Amplify) | Amplify console custom domain |
+| `esp-api.naratech.xyz` | Inference API (FastAPI on ECS via public ALB) | Route53 alias → public ALB (Terraform) |
+| `mail.naratech.xyz` | Mail server SMTP/IMAP (Rocky Linux 9 EC2) | Route53 A record → EC2 public IP (manual update on restart) |
+
+> **Note:** The EC2 mail server uses an auto-assigned public IP (no EIP). The Route53 A record for `mail.naratech.xyz` must be manually updated if the instance is stopped and restarted.
 
 ### OS choice
 
 | Option | Verdict |
 |---|---|
-| **Rocky Linux 9** | Recommended. RHEL-compatible, official AWS Marketplace AMI, drop-in for CentOS workflow |
-| **AlmaLinux 9** | Equally good alternative |
-| **CentOS 9 Stream** | Acceptable but not in AWS Quick Start AMIs; uses community images |
-| **Amazon Linux 2023** | Excellent for AWS-native workloads, but diverges slightly from the CentOS workflow promised in the brief |
+| **Rocky Linux 9** | **Selected.** RHEL-compatible, official AWS Marketplace AMI, used across all M3 Terraform and cloud-init configuration |
+| **AlmaLinux 9** | Equally good alternative if Rocky Linux AMI is unavailable in a region |
+| **Amazon Linux 2023** | Good for AWS-native workloads but diverges from the RHEL/Rocky package ecosystem used in this project |
 
 ---
 

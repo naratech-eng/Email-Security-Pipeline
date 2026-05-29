@@ -1,0 +1,211 @@
+###############################################################################
+# Dev environment — wires all modules together
+###############################################################################
+
+terraform {
+  required_version = ">= 1.6"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region  = var.aws_region
+  profile = var.aws_profile
+}
+
+# --------------------------------------------------------------------------- #
+# Network
+# --------------------------------------------------------------------------- #
+module "network" {
+  source  = "../../modules/network"
+  project = var.project
+}
+
+# --------------------------------------------------------------------------- #
+# S3 Buckets
+# --------------------------------------------------------------------------- #
+module "s3_datasets" {
+  source           = "../../modules/s3_bucket"
+  project          = var.project
+  purpose          = "datasets"
+  bucket_name      = "${var.project}-datasets-${var.aws_region}-802531654188"
+  enable_lifecycle = true
+}
+
+module "s3_models" {
+  source           = "../../modules/s3_bucket"
+  project          = var.project
+  purpose          = "models"
+  bucket_name      = "${var.project}-models-${var.aws_region}-802531654188"
+  enable_lifecycle = false
+}
+
+module "s3_logs" {
+  source           = "../../modules/s3_bucket"
+  project          = var.project
+  purpose          = "logs"
+  bucket_name      = "${var.project}-logs-${var.aws_region}-802531654188"
+  enable_lifecycle = false
+}
+
+# --------------------------------------------------------------------------- #
+# ECR
+# --------------------------------------------------------------------------- #
+module "ecr" {
+  source    = "../../modules/ecr"
+  project   = var.project
+  repo_name = "${var.project}-api"
+}
+
+# --------------------------------------------------------------------------- #
+# RDS Postgres
+# --------------------------------------------------------------------------- #
+module "rds" {
+  source             = "../../modules/rds_postgres"
+  project            = var.project
+  private_subnet_ids = module.network.private_subnet_ids
+  sg_rds_id          = module.network.sg_rds_id
+  db_password        = var.db_password
+}
+
+# --------------------------------------------------------------------------- #
+# ALBs + ACM cert for esp-api.naratech.xyz (fully automated via Route53)
+# --------------------------------------------------------------------------- #
+module "alb" {
+  source             = "../../modules/alb"
+  project            = var.project
+  vpc_id             = module.network.vpc_id
+  public_subnet_ids  = module.network.public_subnet_ids
+  private_subnet_ids = module.network.private_subnet_ids
+  sg_alb_public_id   = module.network.sg_alb_public_id
+  sg_alb_internal_id = module.network.sg_alb_internal_id
+  esp_api_zone_id    = var.esp_api_zone_id
+}
+
+# --------------------------------------------------------------------------- #
+# ACM cert for esp.naratech.xyz (used by Amplify custom domain)
+# --------------------------------------------------------------------------- #
+resource "aws_acm_certificate" "esp" {
+  domain_name       = "esp.naratech.xyz"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Project = var.project
+    Purpose = "amplify-frontend"
+  }
+}
+
+resource "aws_route53_record" "esp_cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.esp.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  zone_id         = var.esp_zone_id
+  name            = each.value.name
+  type            = each.value.type
+  records         = [each.value.record]
+  ttl             = 60
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "esp" {
+  certificate_arn         = aws_acm_certificate.esp.arn
+  validation_record_fqdns = [for r in aws_route53_record.esp_cert_validation : r.fqdn]
+}
+
+# --------------------------------------------------------------------------- #
+# ECS Fargate
+# --------------------------------------------------------------------------- #
+module "ecs" {
+  source             = "../../modules/ecs_service"
+  project            = var.project
+  aws_region         = var.aws_region
+  environment        = var.environment
+  private_subnet_ids = module.network.private_subnet_ids
+  sg_ecs_id          = module.network.sg_ecs_id
+  public_tg_arn      = module.alb.public_tg_arn
+  internal_tg_arn    = module.alb.internal_tg_arn
+  model_bucket_name  = module.s3_models.bucket_id
+}
+
+# --------------------------------------------------------------------------- #
+# EC2 Mail Server (Rocky Linux 9) + Route53 A record for mail.naratech.xyz
+# --------------------------------------------------------------------------- #
+module "mail_server" {
+  source           = "../../modules/ec2_mailserver"
+  project          = var.project
+  public_subnet_id = module.network.public_subnet_ids[0]
+  sg_mail_id       = module.network.sg_mail_id
+  key_name         = var.key_name
+  mail_domain      = var.mail_domain
+  mail_hostname    = var.mail_hostname
+  mail_zone_id     = var.mail_zone_id
+}
+
+# --------------------------------------------------------------------------- #
+# Cognito
+# --------------------------------------------------------------------------- #
+module "cognito" {
+  source        = "../../modules/cognito"
+  project       = var.project
+  callback_urls = var.cognito_callback_urls
+  logout_urls   = var.cognito_logout_urls
+}
+
+# --------------------------------------------------------------------------- #
+# Outputs
+# --------------------------------------------------------------------------- #
+output "vpc_id" {
+  value = module.network.vpc_id
+}
+
+output "public_alb_dns" {
+  value       = module.alb.public_alb_dns
+  description = "Aliased to esp-api.naratech.xyz via Route53"
+}
+
+output "mail_server_ip" {
+  value       = module.mail_server.public_ip
+  description = "Auto-assigned — Route53 A record updated on each apply"
+}
+
+output "rds_endpoint" {
+  value = module.rds.endpoint
+}
+
+output "ecr_repo_url" {
+  value = module.ecr.repo_url
+}
+
+output "cognito_pool_id" {
+  value = module.cognito.user_pool_id
+}
+
+output "cognito_client_id" {
+  value = module.cognito.client_id
+}
+
+output "datasets_bucket" {
+  value = module.s3_datasets.bucket_id
+}
+
+output "models_bucket" {
+  value = module.s3_models.bucket_id
+}
+
+output "esp_acm_cert_arn" {
+  value       = aws_acm_certificate_validation.esp.certificate_arn
+  description = "Paste this ARN into Amplify console when setting esp.naratech.xyz custom domain"
+}
