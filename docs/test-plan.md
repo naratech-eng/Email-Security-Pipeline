@@ -16,8 +16,8 @@ We use four layers of testing:
 ## 2. Environments
 
 - **Dev:** Local laptop, mock Postfix, in-memory DB
-- **Staging:** CentOS VM with full pipeline, isolated from real mail
-- **Demo:** Same CentOS VM, but with a controlled set of test mailboxes
+- **Staging:** Rocky Linux 9 EC2 instance with full pipeline, isolated from real mail
+- **Demo:** Same Rocky Linux 9 EC2 instance, but with a controlled set of test mailboxes
 
 ## 3. Functional Test Scenarios
 
