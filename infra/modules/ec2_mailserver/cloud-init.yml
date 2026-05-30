@@ -1,0 +1,69 @@
+#cloud-config
+# Rocky Linux 9 — Postfix + Dovecot bootstrap
+# Runs once on first boot via cloud-init
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - epel-release
+
+# postfix, dovecot, swaks, s-nail installed in runcmd after EPEL is available
+
+write_files:
+  - path: /etc/postfix/main.cf.d/esp.cf
+    content: |
+      # Email Security Pipeline — Postfix config
+      myhostname = ${mail_hostname}
+      mydomain   = ${mail_domain}
+      myorigin   = $mydomain
+      inet_interfaces = all
+      inet_protocols = ipv4
+      mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain
+      mynetworks = 127.0.0.0/8
+      relayhost =
+      smtpd_banner = $myhostname ESMTP
+      # Reject open relay
+      smtpd_recipient_restrictions =
+        permit_mynetworks,
+        reject_unauth_destination
+      # Dovecot LMTP delivery
+      mailbox_transport = lmtp:unix:private/dovecot-lmtp
+
+  - path: /etc/dovecot/conf.d/10-mail.conf.d/esp.conf
+    content: |
+      mail_location = maildir:~/Maildir
+      namespace inbox {
+        inbox = yes
+      }
+
+runcmd:
+  # Install packages after EPEL is available (s-nail replaces mailx in Rocky Linux 9)
+  - dnf install -y postfix dovecot swaks s-nail
+
+  # Apply Postfix config
+  - postconf -e "myhostname = ${mail_hostname}"
+  - postconf -e "mydomain = ${mail_domain}"
+  - postconf -e "myorigin = $mydomain"
+  - postconf -e "inet_interfaces = all"
+  - postconf -e "mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain"
+  - postconf -e "mynetworks = 127.0.0.0/8"
+  - postconf -e "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"
+
+  # Create two test mail accounts
+  - useradd -m testuser1 || true
+  - useradd -m testuser2 || true
+  - echo "testuser1:ChangeMe123!" | chpasswd
+  - echo "testuser2:ChangeMe123!" | chpasswd
+
+  # Enable and start services
+  - systemctl enable --now postfix dovecot
+
+  # Smoke test — send a local test email
+  - swaks --to testuser2@localhost --from testuser1@localhost --server 127.0.0.1 --helo ${mail_hostname} || true
+
+final_message: |
+  Rocky Linux 9 mail server bootstrap complete.
+  Postfix and Dovecot are running.
+  Test accounts: testuser1, testuser2 (password: ChangeMe123!)
+  Run: swaks --to testuser2@localhost --from testuser1@localhost
