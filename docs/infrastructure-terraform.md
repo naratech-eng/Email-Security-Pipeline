@@ -29,7 +29,7 @@ infra/
 
 ## 2. State Backend
 
-- **S3 bucket** for state, **DynamoDB table** for locking
+- **S3 bucket** for state; locking via native S3 `use_lockfile = true` (no DynamoDB needed)
 - Both created by the `infra/bootstrap` module on day one
 - State is encrypted with KMS, versioning enabled, public access blocked
 
@@ -74,11 +74,22 @@ terraform {
 | `enable_waf` | `true` | |
 | `enable_guardduty` | `false` | enable in prod |
 
-## 5. Workflows
+## 5. Workflows (GitHub Actions)
 
-- **PR:** `terraform fmt -check`, `terraform validate`, `tfsec`, `checkov`, `terraform plan` against dev workspace, post plan as PR comment.
-- **Merge to main:** `terraform apply` against dev. Requires green PR.
-- **Release tag:** `terraform apply` against prod with manual approval.
+| Workflow | File | Trigger | Steps |
+|---|---|---|---|
+| **PR checks** (`CI-T2`) | `.github/workflows/terraform-pr.yml` | PR → `dev` or `naratech` touching `infra/**` | fmt check → validate → tfsec (HIGH+) → Checkov → plan (OIDC) → post plan as PR comment |
+| **Apply dev** (`CI-T4`) | `.github/workflows/terraform-apply.yml` | Push/merge to `dev` touching `infra/**` | OIDC auth → init → `terraform apply -auto-approve` |
+
+**GitHub secrets required** (Settings → Secrets → Actions):
+
+| Secret | Value |
+|---|---|
+| `AWS_OIDC_ROLE_ARN` | Output of `terraform output github_ci_role_arn` |
+| `TF_VAR_KEY_NAME` | EC2 key pair name |
+| `TF_VAR_DB_PASSWORD` | RDS master password |
+
+The OIDC role is provisioned by `module.github_oidc` in `infra/envs/dev/main.tf`. Run `terraform apply` once locally to create it, then copy the role ARN to GitHub Secrets.
 
 ## 6. Secrets
 

@@ -13,8 +13,10 @@ terraform {
 }
 
 provider "aws" {
-  region  = var.aws_region
-  profile = var.aws_profile
+  region = var.aws_region
+  # No profile argument: the provider uses the standard AWS credential chain.
+  #   Local: `export AWS_PROFILE=lab-user` before running terraform.
+  #   CI:    OIDC temporary credentials injected as env vars by configure-aws-credentials.
 }
 
 # --------------------------------------------------------------------------- #
@@ -165,8 +167,23 @@ module "cognito" {
 }
 
 # --------------------------------------------------------------------------- #
+# GitHub Actions OIDC
+# --------------------------------------------------------------------------- #
+module "github_oidc" {
+  source      = "../../modules/github_oidc"
+  project     = var.project
+  environment = var.environment
+  github_repo = "naratech-eng/Email-Security-Pipeline"
+}
+
+# --------------------------------------------------------------------------- #
 # Outputs
 # --------------------------------------------------------------------------- #
+output "github_ci_role_arn" {
+  description = "Set this as the AWS_OIDC_ROLE_ARN secret in GitHub Actions"
+  value       = module.github_oidc.role_arn
+}
+
 output "vpc_id" {
   value = module.network.vpc_id
 }
