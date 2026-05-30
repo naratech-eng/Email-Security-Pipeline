@@ -59,8 +59,8 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:ListBucket"]
+      Effect = "Allow"
+      Action = ["s3:GetObject", "s3:ListBucket"]
       Resource = [
         "arn:aws:s3:::${var.model_bucket_name}",
         "arn:aws:s3:::${var.model_bucket_name}/*"
