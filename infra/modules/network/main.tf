@@ -1,0 +1,278 @@
+###############################################################################
+# Module: network
+# Creates VPC, public + private subnets across 2 AZs, NAT gateway, route tables,
+# and baseline security groups.
+###############################################################################
+
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# --------------------------------------------------------------------------- #
+# VPC
+# --------------------------------------------------------------------------- #
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name    = "${var.project}-vpc"
+    Project = var.project
+  }
+}
+
+# --------------------------------------------------------------------------- #
+# Subnets — 2 AZs
+# --------------------------------------------------------------------------- #
+resource "aws_subnet" "public" {
+  count                   = 2
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 4, count.index)
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name    = "${var.project}-public-${count.index + 1}"
+    Project = var.project
+    Tier    = "public"
+  }
+}
+
+resource "aws_subnet" "private" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index + 2)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    Name    = "${var.project}-private-${count.index + 1}"
+    Project = var.project
+    Tier    = "private"
+  }
+}
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+# --------------------------------------------------------------------------- #
+# Internet Gateway
+# --------------------------------------------------------------------------- #
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name    = "${var.project}-igw"
+    Project = var.project
+  }
+}
+
+# --------------------------------------------------------------------------- #
+# NAT Gateway (single, in first public subnet — dev cost saving)
+# --------------------------------------------------------------------------- #
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags = {
+    Name    = "${var.project}-nat-eip"
+    Project = var.project
+  }
+}
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = {
+    Name    = "${var.project}-nat"
+    Project = var.project
+  }
+}
+
+# --------------------------------------------------------------------------- #
+# Route Tables
+# --------------------------------------------------------------------------- #
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name    = "${var.project}-rt-public"
+    Project = var.project
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = {
+    Name    = "${var.project}-rt-private"
+    Project = var.project
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  count          = 2
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
+
+# --------------------------------------------------------------------------- #
+# Security Groups
+# --------------------------------------------------------------------------- #
+
+# ALB — public-facing HTTPS only
+resource "aws_security_group" "alb_public" {
+  name        = "${var.project}-sg-alb-public"
+  description = "Public ALB: allow HTTPS in, all out"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS from internet"
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP redirect"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project}-sg-alb-public", Project = var.project }
+}
+
+# ALB — internal (milter → inference)
+resource "aws_security_group" "alb_internal" {
+  name        = "${var.project}-sg-alb-internal"
+  description = "Internal ALB: allow HTTPS from VPC"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "HTTPS from VPC"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project}-sg-alb-internal", Project = var.project }
+}
+
+# ECS Fargate tasks
+resource "aws_security_group" "ecs" {
+  name        = "${var.project}-sg-ecs"
+  description = "ECS Fargate: allow from ALBs only"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_public.id, aws_security_group.alb_internal.id]
+    description     = "FastAPI port from ALBs"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project}-sg-ecs", Project = var.project }
+}
+
+# RDS — only from ECS
+resource "aws_security_group" "rds" {
+  name        = "${var.project}-sg-rds"
+  description = "RDS: allow Postgres only from ECS"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+    description     = "Postgres from ECS"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project}-sg-rds", Project = var.project }
+}
+
+# EC2 Mail Server
+resource "aws_security_group" "mail" {
+  name        = "${var.project}-sg-mail"
+  description = "Rocky Linux mail server: SMTP + SSH"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 25
+    to_port     = 25
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SMTP inbound"
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.ssh_allowed_cidrs
+    description = "SSH management"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project}-sg-mail", Project = var.project }
+}
