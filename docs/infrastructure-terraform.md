@@ -29,7 +29,7 @@ infra/
 
 ## 2. State Backend
 
-- **S3 bucket** for state, **DynamoDB table** for locking
+- **S3 bucket** for state; locking via native S3 `use_lockfile = true` (no DynamoDB needed)
 - Both created by the `infra/bootstrap` module on day one
 - State is encrypted with KMS, versioning enabled, public access blocked
 
