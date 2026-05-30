@@ -45,9 +45,12 @@ flowchart LR
 
 | Branch | Environment | Notes |
 |---|---|---|
-| feature/* | none | runs CI on PR |
-| `main` | dev | auto-deploy on merge |
-| tagged release `v*` | prod (demo) | manual approval gate |
+| `feature/*` | none | CI checks run on PR; plan posted as PR comment |
+| `dev` | dev | `terraform apply` runs automatically on merge |
+| `naratech` | prod (demo) | manual approval gate before apply |
+| tagged release `v*` | prod (demo) | alias for naratech-based releases |
+
+Flow: `feature/… → dev → naratech`
 
 Amplify handles preview environments per PR for the dashboard automatically.
 

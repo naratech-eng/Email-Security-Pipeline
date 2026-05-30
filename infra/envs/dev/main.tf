@@ -165,8 +165,23 @@ module "cognito" {
 }
 
 # --------------------------------------------------------------------------- #
+# GitHub Actions OIDC
+# --------------------------------------------------------------------------- #
+module "github_oidc" {
+  source      = "../../modules/github_oidc"
+  project     = var.project
+  environment = var.environment
+  github_repo = "naratech-eng/Email-Security-Pipeline"
+}
+
+# --------------------------------------------------------------------------- #
 # Outputs
 # --------------------------------------------------------------------------- #
+output "github_ci_role_arn" {
+  description = "Set this as the AWS_OIDC_ROLE_ARN secret in GitHub Actions"
+  value       = module.github_oidc.role_arn
+}
+
 output "vpc_id" {
   value = module.network.vpc_id
 }
