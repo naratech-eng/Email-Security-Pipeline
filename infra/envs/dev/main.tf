@@ -13,8 +13,10 @@ terraform {
 }
 
 provider "aws" {
-  region  = var.aws_region
-  profile = var.aws_profile
+  region = var.aws_region
+  # Local runs use the lab-user profile; in CI set TF_VAR_aws_profile="" so the
+  # provider falls back to the OIDC environment credentials.
+  profile = var.aws_profile != "" ? var.aws_profile : null
 }
 
 # --------------------------------------------------------------------------- #

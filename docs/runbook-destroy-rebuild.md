@@ -22,10 +22,13 @@
 
 ```bash
 cd infra/envs/dev
+export AWS_PROFILE=lab-user   # backend.tf has no hardcoded profile (so CI can use OIDC)
 terraform init
 ```
 
 Expected: `Terraform has been successfully initialized`. If the state bucket was also destroyed, re-run bootstrap first (see [Appendix A](#appendix-a-re-bootstrap-state-backend)).
+
+> **Why `AWS_PROFILE`?** The S3 backend no longer hardcodes `profile = "lab-user"` so GitHub Actions can authenticate via OIDC. Local runs must therefore export `AWS_PROFILE=lab-user` (or pass `terraform init -backend-config="profile=lab-user"`).
 
 ---
 
