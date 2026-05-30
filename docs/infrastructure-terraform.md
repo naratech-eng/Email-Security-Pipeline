@@ -10,23 +10,21 @@ infra/
 │   └── main.tf
 ├── envs/
 │   ├── dev/
-│   │   ├── backend.tf
-│   │   ├── main.tf
+│   │   ├── backend.tf          # S3 backend with use_lockfile
+│   │   ├── main.tf             # wires all modules + Amplify ACM cert
 │   │   ├── variables.tf
-│   │   └── terraform.tfvars
+│   │   └── terraform.tfvars    # non-sensitive vars only
 │   └── prod/
 │       └── ...                 # mirrors dev
 └── modules/
-    ├── network/                # VPC, subnets, NAT, security groups
-    ├── ecr/                    # container registry
-    ├── ecs_service/            # Fargate service + ALB target group
-    ├── alb/                    # public + internal ALBs
-    ├── rds_postgres/           # RDS instance + subnet group
-    ├── s3_bucket/              # reusable bucket with secure defaults
-    ├── ec2_mailserver/         # Rocky Linux 9 + cloud-init for Postfix/Dovecot
-    ├── cognito/                # user pool + app client
-    ├── waf/                    # WAF web ACL + association
-    └── observability/          # CloudWatch log groups, alarms, dashboards
+    ├── network/                # VPC, subnets (2 AZ), NAT, 5 security groups
+    ├── ecr/                    # container registry + lifecycle policy
+    ├── ecs_service/            # Fargate cluster + service + IAM roles
+    ├── alb/                    # public + internal ALBs + ACM cert + Route53 alias
+    ├── rds_postgres/           # RDS Postgres instance + subnet group
+    ├── s3_bucket/              # reusable secure bucket (encryption, versioning, lifecycle)
+    ├── ec2_mailserver/         # Rocky Linux 9 EC2 + cloud-init (Postfix/Dovecot) + Route53 A
+    └── cognito/                # user pool + app client
 ```
 
 ## 2. State Backend
@@ -108,3 +106,38 @@ Defined as inputs to modules, **never hard-coded**:
 - Multi-account (Control Tower)
 - Multi-region failover
 - Service Catalog / Landing Zone
+
+---
+
+## 10. Deployed Resources — Dev (M3, 2026-05-30)
+
+> Applied via `terraform apply` from `infra/envs/dev/`. Account: `802531654188`, region: `us-east-1`.
+
+| Resource | ID / Value |
+|---|---|
+| **VPC** | `vpc-08e7bed55cbc31415` |
+| **TF State bucket** | `esp-tfstate-us-east-1-802531654188` |
+| **TF Lock table** | `esp-tflock` |
+| **EC2 Mail Server** | `i-056a4a6bee98ef956` — Rocky Linux 9, t3.small |
+| **Mail server IP** | `32.195.68.184` (auto-assigned, update Route53 on restart) |
+| **Route53 A** | `mail.naratech.xyz` → `32.195.68.184` |
+| **Public ALB** | `esp-alb-public-251921633.us-east-1.elb.amazonaws.com` |
+| **Route53 alias** | `esp-api.naratech.xyz` → public ALB |
+| **ACM cert (API)** | `esp-api.naratech.xyz` — DNS validated via Route53 |
+| **ACM cert (frontend)** | `esp.naratech.xyz` — `arn:aws:acm:us-east-1:802531654188:certificate/574ab3c1-f496-43bb-95b9-dd4b201b37fb` |
+| **RDS endpoint** | `esp-postgres.cyfqkq2co3o1.us-east-1.rds.amazonaws.com:5432` |
+| **ECR repo** | `802531654188.dkr.ecr.us-east-1.amazonaws.com/esp-api` |
+| **ECS cluster** | `esp-cluster` |
+| **Cognito pool** | `us-east-1_vz3jUMnQT` |
+| **Cognito client** | `41h5itgfsipltd4ngi9uhkrn1j` |
+| **S3 datasets** | `esp-datasets-us-east-1-802531654188` |
+| **S3 models** | `esp-models-us-east-1-802531654188` |
+| **S3 logs** | `esp-logs-us-east-1-802531654188` |
+
+### DNS (Namecheap → Route53 NS delegation)
+
+| Subdomain | Purpose | Route53 Zone ID |
+|---|---|---|
+| `esp.naratech.xyz` | Amplify frontend | `Z08382621P3TE6ILDEBXO` |
+| `esp-api.naratech.xyz` | Public ALB / inference API | `Z04132153JT7YAXT7E8D` |
+| `mail.naratech.xyz` | Rocky Linux 9 mail server | `Z04118593IZKW7SZN71AP` |
