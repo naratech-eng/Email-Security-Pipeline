@@ -1,8 +1,8 @@
 # Dev environment — non-sensitive vars only
 # NEVER put db_password here — use: export TF_VAR_db_password="yourpassword"
+# AWS auth: local runs `export AWS_PROFILE=lab-user`; CI uses OIDC env credentials.
 
 aws_region  = "us-east-1"
-aws_profile = "lab-user"
 project     = "esp"
 environment = "dev"
 
