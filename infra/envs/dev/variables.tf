@@ -3,11 +3,6 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
-variable "aws_profile" {
-  type    = string
-  default = "lab-user"
-}
-
 variable "project" {
   type    = string
   default = "esp"

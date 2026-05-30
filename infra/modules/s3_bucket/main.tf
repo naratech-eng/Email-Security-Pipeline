@@ -4,6 +4,7 @@
 ###############################################################################
 
 resource "aws_s3_bucket" "this" {
+  #checkov:skip=CKV2_AWS_62: Event notifications not needed — no SNS/SQS/Lambda consumer for these buckets
   bucket = var.bucket_name
 
   tags = {
@@ -19,12 +20,14 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
+# KMS encryption with the AWS-managed aws/s3 key (no extra cost) (CKV_AWS_145)
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm = "aws:kms"
     }
+    bucket_key_enabled = true
   }
 }
 
@@ -36,24 +39,44 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
+# Lifecycle is always created so every bucket satisfies CKV2_AWS_61 and
+# aborts incomplete multipart uploads (CKV_AWS_300). Storage-class transitions
+# are only added when enable_lifecycle = true.
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  count  = var.enable_lifecycle ? 1 : 0
   bucket = aws_s3_bucket.this.id
 
   rule {
-    id     = "transition-old-objects"
+    id     = "abort-incomplete-uploads"
     status = "Enabled"
 
-    filter { prefix = "" }
+    filter {}
 
-    transition {
-      days          = 90
-      storage_class = "STANDARD_IA"
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
+  }
 
-    transition {
-      days          = 180
-      storage_class = "GLACIER"
+  dynamic "rule" {
+    for_each = var.enable_lifecycle ? [1] : []
+    content {
+      id     = "transition-old-objects"
+      status = "Enabled"
+
+      filter { prefix = "" }
+
+      abort_incomplete_multipart_upload {
+        days_after_initiation = 7
+      }
+
+      transition {
+        days          = 90
+        storage_class = "STANDARD_IA"
+      }
+
+      transition {
+        days          = 180
+        storage_class = "GLACIER"
+      }
     }
   }
 }

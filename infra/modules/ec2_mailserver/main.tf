@@ -50,6 +50,8 @@ resource "aws_iam_instance_profile" "ssm" {
 
 # EC2 instance — auto-assigned public IP (no EIP)
 resource "aws_instance" "mail" {
+  #checkov:skip=CKV_AWS_88: Mail server requires a public IP to receive SMTP and present an MX endpoint
+  #checkov:skip=CKV_AWS_126: Detailed (1-min) monitoring adds CloudWatch cost; default 5-min metrics suffice for the lab
   ami                         = data.aws_ami.rocky9.id
   instance_type               = var.instance_type
   subnet_id                   = var.public_subnet_id
@@ -57,6 +59,14 @@ resource "aws_instance" "mail" {
   key_name                    = var.key_name
   associate_public_ip_address = true
   iam_instance_profile        = aws_iam_instance_profile.ssm.name
+  ebs_optimized               = true # CKV_AWS_135
+
+  # Require IMDSv2 (token-based metadata access) — CKV_AWS_79
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+  }
 
   root_block_device {
     volume_size           = 20

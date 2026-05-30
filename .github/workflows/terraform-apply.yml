@@ -1,0 +1,45 @@
+name: Terraform Apply — dev
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "infra/**"
+
+env:
+  TF_VERSION: "1.10.5" # >= 1.10 required for S3 backend use_lockfile
+  TF_WORKING_DIR: infra/envs/dev
+
+jobs:
+  apply:
+    name: terraform apply (dev)
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform apply
+        run: |
+          terraform apply -auto-approve \
+            -var="key_name=${{ secrets.TF_VAR_KEY_NAME }}" \
+            -var="db_password=${{ secrets.TF_VAR_DB_PASSWORD }}"
+        working-directory: ${{ env.TF_WORKING_DIR }}
