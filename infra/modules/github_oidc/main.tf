@@ -53,6 +53,7 @@ resource "aws_iam_role" "github_ci" {
 }
 
 resource "aws_iam_role_policy_attachment" "github_ci_admin" {
+  #checkov:skip=CKV_AWS_274: CI needs broad permissions to apply every module in the lab account; the role is OIDC-gated to this repo only. Scope to a custom least-privilege policy before any prod use.
   role = aws_iam_role.github_ci.name
   # AdministratorAccess scoped to the dev account is acceptable for a student
   # capstone lab. Tighten to a custom policy before any production workload.

@@ -3,6 +3,7 @@
 ###############################################################################
 
 resource "aws_ecr_repository" "this" {
+  #checkov:skip=CKV_AWS_51: Tags kept mutable so CI can re-push the "latest" placeholder image; switch to IMMUTABLE with git-SHA tags once the M6 build pipeline lands
   name                 = var.repo_name
   image_tag_mutability = "MUTABLE"
 
@@ -10,8 +11,9 @@ resource "aws_ecr_repository" "this" {
     scan_on_push = true
   }
 
+  # KMS encryption with the AWS-managed aws/ecr key (no extra cost) (CKV_AWS_136)
   encryption_configuration {
-    encryption_type = "AES256"
+    encryption_type = "KMS"
   }
 
   tags = {

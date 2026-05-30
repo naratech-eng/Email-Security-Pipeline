@@ -14,8 +14,9 @@ resource "aws_ecs_cluster" "main" {
 }
 
 resource "aws_cloudwatch_log_group" "api" {
+  #checkov:skip=CKV_AWS_158: KMS encryption needs a dedicated CMK (~$1/mo); deferred for the budget lab — logs use the default CloudWatch encryption
   name              = "/ecs/${var.project}/api"
-  retention_in_days = 30
+  retention_in_days = 365 # CKV_AWS_338 — retain at least 1 year
   tags              = { Project = var.project }
 }
 
@@ -78,6 +79,8 @@ resource "aws_ecs_task_definition" "api" {
   memory                   = var.memory
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
+
+  #checkov:skip=CKV_AWS_336: readonlyRootFilesystem can't be enforced on the placeholder image yet; revisit when the real FastAPI image lands in M6 (it writes temp model files)
 
   container_definitions = jsonencode([{
     name      = "api"

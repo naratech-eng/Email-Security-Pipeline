@@ -10,6 +10,12 @@ resource "aws_db_subnet_group" "this" {
 }
 
 resource "aws_db_instance" "this" {
+  # --- Skips: cost / lab-workflow tradeoffs ---
+  #checkov:skip=CKV_AWS_157: Multi-AZ doubles the RDS bill; single-AZ is acceptable for the dev lab (enable in prod)
+  #checkov:skip=CKV_AWS_118: Enhanced monitoring adds CloudWatch agent cost; deferred for the budget lab
+  #checkov:skip=CKV_AWS_293: Deletion protection would block the OPS-T1 destroy/rebuild runbook; off in dev
+  #checkov:skip=CKV2_AWS_30: Query logging requires a custom parameter group; deferred (perf insights covers lab needs)
+  #checkov:skip=CKV_AWS_354: Performance Insights uses the default AWS-managed key; a dedicated CMK (~$1/mo) is deferred for the budget lab
   identifier            = "${var.project}-postgres"
   engine                = "postgres"
   engine_version        = "16"
@@ -30,6 +36,14 @@ resource "aws_db_instance" "this" {
   publicly_accessible = false
   skip_final_snapshot = true # set to false before prod demo
   deletion_protection = false
+
+  # Free / near-free hardening
+  iam_database_authentication_enabled   = true                      # CKV_AWS_161
+  auto_minor_version_upgrade            = true                      # CKV_AWS_226
+  copy_tags_to_snapshot                 = true                      # CKV2_AWS_60
+  enabled_cloudwatch_logs_exports       = ["postgresql", "upgrade"] # CKV_AWS_129
+  performance_insights_enabled          = true                      # CKV_AWS_353
+  performance_insights_retention_period = 7                         # 7 days = free tier
 
   backup_retention_period = 1 # free-tier max is 1; set to 7 on paid account
   backup_window           = "03:00-04:00"
