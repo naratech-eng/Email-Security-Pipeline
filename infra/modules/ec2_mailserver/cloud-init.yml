@@ -30,7 +30,7 @@ write_files:
       # Dovecot LMTP delivery
       mailbox_transport = lmtp:unix:private/dovecot-lmtp
 
-  - path: /etc/dovecot/conf.d/10-mail.conf.d/esp.conf
+  - path: /etc/dovecot/conf.d/10-mail.conf
     content: |
       mail_location = maildir:~/Maildir
       namespace inbox {
@@ -41,14 +41,15 @@ runcmd:
   # Install packages after EPEL is available (s-nail replaces mailx in Rocky Linux 9)
   - dnf install -y postfix dovecot swaks s-nail
 
-  # Apply Postfix config
+  # Apply Postfix config — use Terraform-rendered values directly (no shell var expansion)
   - postconf -e "myhostname = ${mail_hostname}"
   - postconf -e "mydomain = ${mail_domain}"
-  - postconf -e "myorigin = $mydomain"
+  - postconf -e "myorigin = ${mail_domain}"
   - postconf -e "inet_interfaces = all"
-  - postconf -e "mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain"
+  - postconf -e "mydestination = ${mail_hostname}, localhost.${mail_domain}, localhost, ${mail_domain}"
   - postconf -e "mynetworks = 127.0.0.0/8"
   - postconf -e "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"
+  - newaliases
 
   # Create two test mail accounts
   - useradd -m testuser1 || true
