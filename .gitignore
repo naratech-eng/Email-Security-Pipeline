@@ -151,3 +151,12 @@ sample_notion.md
 
 # Project data (uploaded to S3)
 data/.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+.pytest_cache/
+.venv/
+venv/
