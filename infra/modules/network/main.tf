@@ -88,8 +88,13 @@ resource "aws_internet_gateway" "main" {
 
 # --------------------------------------------------------------------------- #
 # NAT Gateway (single, in first public subnet — dev cost saving)
+# Disabled by default (var.enable_nat_gateway = false) so the hourly NAT + EIP
+# charge can't silently return on a re-apply while the project is paused.
+# Private subnets have no internet egress when this is off; re-enable (or add
+# VPC endpoints) when private workloads need outbound access.
 # --------------------------------------------------------------------------- #
 resource "aws_eip" "nat" {
+  count  = var.enable_nat_gateway ? 1 : 0
   domain = "vpc"
   tags = {
     Name    = "${var.project}-nat-eip"
@@ -98,7 +103,8 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
+  count         = var.enable_nat_gateway ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
 
   tags = {
@@ -133,9 +139,14 @@ resource "aws_route_table_association" "public" {
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
+  # Default route only exists when the NAT gateway is enabled. With NAT off the
+  # private subnets stay fully private (no 0.0.0.0/0 egress) and cost nothing.
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.main[0].id
+    }
   }
 
   tags = {
