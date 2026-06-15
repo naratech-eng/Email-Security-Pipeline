@@ -4,8 +4,7 @@
 
 > Optional stretch comparisons for the M5 report. Both run on **GPU (Google Colab)** — CPU
 > training is impractical. They answer one question per track: *does a deep model beat the
-> classical winner by enough to justify the extra compute?* Replace each `<value>` after the
-> GPU run.
+> classical winner by enough to justify the extra compute?*
 
 ## Why these two models
 The classical experiments (M5-T2 email, M5-T3 URL) already use **hand-engineered features**
@@ -34,11 +33,23 @@ models skip the classical 5-fold CV (too expensive), so their `cv_f1` cell is le
 3. Fine-tune 2–3 epochs (HuggingFace `Trainer`, lr 2e-5, batch 16).
 4. Evaluate on the held-out test split; log a `DistilBERT (fine-tuned)` row (track=`email`).
 
+**Colab run — data load, tokenization, fine-tuning, evaluation:**
+
+![Data load — email splits](../Image/M5-T7/run1_data_load.png)
+
+![Tokenization with distilbert-base-uncased](../Image/M5-T7/run2_tokenize.png)
+
+![Fine-tuning (2 epochs, F1 0.993 → 0.994)](../Image/M5-T7/run3_finetune_training.png)
+
+![Evaluation + logged result (F1 0.9942)](../Image/M5-T7/run4_eval_result.png)
+
 ### Result
 | Model | F1 | ROC-AUC | Precision | Recall | Train time |
 | --- | --- | --- | --- | --- | --- |
 | LinearSVC (M5-T2, classical) | 0.9903 | 0.9991 | 0.9886 | 0.9919 | ~42 s (CPU) |
 | **DistilBERT (M5-T7)** | **0.9942** | 0.9997 | 0.9944 | 0.9939 | ~10,830 s (~3 h, GPU) |
+
+![Email-track F1 by model (DistilBERT highlighted)](../Image/M5-T7/fig_email_model_comparison.png)
 
 **Verdict: DistilBERT wins, but only barely — +0.0039 F1 (0.9942 vs 0.9903).** The classical
 model was already near-perfect, leaving almost no headroom. The gain costs **~258× the training
@@ -61,11 +72,25 @@ far too small to justify the compute and deployment complexity.
    `class_weight` for the ~2:1 imbalance.
 4. Train ~5 epochs; evaluate on test; log a `Char-CNN (raw URLs)` row (track=`url`).
 
+**Colab run — data load, char encoding, model, training, evaluation:**
+
+![Data load — URL splits](../Image/M5-T8/run1_data_load.png)
+
+![Character vocabulary + encoding (vocab 331, 200-char sequences)](../Image/M5-T8/run2_char_encoding.png)
+
+![Char-CNN model architecture](../Image/M5-T8/run3_model_architecture.png)
+
+![Training (5 epochs, val_accuracy → 0.981)](../Image/M5-T8/run4_training.png)
+
+![Evaluation + logged result (F1 0.9739)](../Image/M5-T8/run5_eval_result.png)
+
 ### Result
 | Model | F1 | ROC-AUC | Precision | Recall | Train time |
 | --- | --- | --- | --- | --- | --- |
 | Random Forest (M5-T3, engineered) | 0.8660 | 0.9648 | 0.8755 | 0.8567 | ~96 s |
 | **Char-CNN (M5-T8)** | **0.9739** | 0.9976 | 0.9709 | 0.9770 | ~642 s (~11 min, GPU) |
+
+![URL-track F1 by model (Char-CNN highlighted)](../Image/M5-T8/fig_url_model_comparison.png)
 
 **Verdict: the char-CNN decisively beats the engineered-feature model — +0.108 F1 (0.974 vs
 0.866)** and +0.033 ROC-AUC. Learning directly from raw URL characters captures obfuscation
@@ -76,6 +101,9 @@ the URL model for M6**, keeping Random Forest as a lightweight CPU fallback.
 ---
 
 ## How this feeds M5-T5
+
+![Cost vs. gain — F1 against training time, both tracks](../Image/M5-T7/fig_cost_vs_gain.png)
+
 Both rows are in `results/m5_results.csv` alongside the classical models. The two tracks land on
 **opposite verdicts**, which is the interesting finding:
 
