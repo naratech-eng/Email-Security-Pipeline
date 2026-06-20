@@ -17,6 +17,15 @@
 * [Threat Model](threat-model.md)
 * [Test Plan](test-plan.md)
 
+## Machine Learning
+
+* [Model Selection (overview)](machine-learning.md)
+* [Evaluation Protocol & Harness (M5-T1)](m5-t1-report-section.md)
+* [URL Classifier Experiments (M5-T3)](m5-t3-report-section.md)
+* [Model Comparison & Selection (M5-T5)](m5-t5-model-comparison.md)
+* [Deep-Learning Stretch (M5-T7/T8)](m5-t7-t8-deep-learning.md)
+* [Deep-Learning Research (M5-T11)](m5-t11-deep-learning-research.md)
+
 ## Decisions
 
 * [ADR-0001: Record architecture decisions](adr/0001-record-architecture-decisions.md)
