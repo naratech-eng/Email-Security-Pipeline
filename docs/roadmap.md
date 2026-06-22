@@ -11,15 +11,16 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
 
 ## Milestone Plan
 
-### M1 — Understanding Phishing Threats
+### M1 — Understanding Phishing Threats ✅ Complete
 - Deliverables: Research presentation, no formal report required
 - Exit: Team can describe phishing types, URL tactics, and detection approaches confidently
 
-### M2 — Dataset Collection
+### M2 — Dataset Collection ✅ Complete
 - Deliverables: Datasets imported, dataset README, presentation + report
 - Exit: At least one phishing email dataset, one URL dataset, one clean email dataset are versioned and documented
+- **Outcome:** phishing-email dataset (~82.5k rows) and malicious-URL dataset (~651k) imported to S3 and documented; see [Dataset EDA](datasets/eda.md).
 
-### M3 — AWS Foundation + Email Server (Rocky Linux on EC2)
+### M3 — AWS Foundation + Email Server (Rocky Linux on EC2) ✅ Complete
 - Deliverables:
   - Existing AWS baseline from M2 reviewed and reused, especially IAM and the datasets S3 bucket
   - Terraform codifies or extends the required AWS foundation for later milestones
@@ -27,10 +28,12 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
   - Setup runbook in `docs/`
   - Budget alerts and MFA confirmed for the active AWS account
 - Exit: Terraform can reproduce or extend the agreed infra baseline, and the Rocky Linux mail server successfully sends and receives test emails between two local accounts
+- **Outcome:** Terraform baseline live; Postfix + Dovecot mail server verified (local delivery works, open-relay rejected). See the [destroy/rebuild runbook](runbook-destroy-rebuild.md).
 
-### M4 — Data Preprocessing
+### M4 — Data Preprocessing ✅ Complete
 - Deliverables: Preprocessing pipeline, processed dataset, feature documentation
 - Exit: Reproducible script that produces a feature matrix from raw data
+- **Outcome:** reproducible pipeline produced the email feature matrix (82,078 rows) and 11-feature URL matrix (641,119 rows), exported as stratified train/test splits. See the [Feature Matrix](data/feature-matrix.md).
 
 ### M5 — ML Model Selection ✅ Complete
 - Deliverables: Model comparison table, selection rationale, presentation + report
