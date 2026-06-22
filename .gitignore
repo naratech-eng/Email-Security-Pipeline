@@ -152,6 +152,16 @@ sample_notion.md
 # Project data (uploaded to S3)
 data/.DS_Store
 
+# Raw + processed datasets (tracked via SPLITS.sha256, stored in S3)
+data/raw/
+data/processed/*.csv
+
+# Model artifacts (serialized to S3, not git)
+models/
+
+# Generated registry manifest (uploaded to S3 by m6_t7_registry.ipynb, not committed)
+registry.json
+
 # Python
 __pycache__/
 *.py[cod]
