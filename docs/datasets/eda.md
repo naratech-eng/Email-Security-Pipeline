@@ -4,8 +4,9 @@
 **Owner:** Sanjeewa Narayana
 **Notebook:** `notebooks/m2_eda.ipynb`
 
-> This document captures the light exploratory data analysis performed during M2.
-> Deep feature-level analysis is deferred to M4 (Preprocessing) and M5/M6 (Model Selection/Training).
+> Light exploratory analysis from M2, now updated with the final figures confirmed through
+> M4 (Preprocessing) and M5 (Model Selection). Cleaned/model-ready counts come from the
+> M4-T7 stratified splits in `data/processed/`.
 
 ---
 
@@ -16,38 +17,40 @@
 
 | Metric | Value |
 |---|---|
-| Total rows | ~82,500 |
-| Phishing emails | TBD — update after EDA notebook run |
-| Legitimate emails | TBD — update after EDA notebook run |
+| Total rows (raw) | ~82,500 |
+| Total rows (cleaned, M4-T1) | **82,078** |
+| Phishing emails | **42,845 (52.2%)** |
+| Legitimate emails | **39,233 (47.8%)** |
 | Columns | `sender`, `subject`, `body`, `label` (and others) |
-| Duplicates found | TBD |
-| Empty rows | TBD |
-| Encoding issues | TBD |
+| Duplicates / invalid rows removed | ~400 (raw ≈ 82.5k → 82,078 cleaned in M4-T1) |
+| Empty / encoding issues | handled in the M4-T1 normalization step (HTML/URL/header stripping) |
 
-**Spot-check notes:** *(fill in after running notebook)*
+**Notes:** roughly balanced after cleaning; model-ready split is 65,662 train / 16,416 test (M4-T7).
 
 ---
 
 ## 2. Malicious URL Dataset
 
 **Sources:**
-1. Kaggle — Manu Siddhartha (primary): `s3://email-security-pipeline-datasets/datasets/urls/kaggle-malicious-urls.csv`
+1. Kaggle — Manu Siddhartha (primary): `s3://email-security-pipeline-datasets/datasets/urls/malicious_phish.csv`
 2. URLhaus — abuse.ch (supplementary): `s3://email-security-pipeline-datasets/datasets/urls/urlhaus-YYYY-MM-DD.csv`
 
 | Metric | Value |
 |---|---|
-| Total URLs (Kaggle) | ~651,000 |
-| Classes | benign, phishing, malware, defacement |
-| URLhaus date range | TBD — update after EDA notebook run |
-| Duplicates found | TBD |
-| Malformed URLs | TBD |
+| Total URLs (raw, Kaggle) | ~651,000 |
+| Total URLs (deduplicated, M4-T3) | **641,119** |
+| Original classes | benign, phishing, malware, defacement |
+| Binarized labels (M4-T3) | **benign 428,080 (66.8%) · malicious 213,039 (33.2%)** — ≈ 2:1 |
+| Duplicates removed | ~9,900 (≈ 651k → 641,119) |
+| URLhaus date range / malformed URLs | URLhaus used only as a supplementary feed; not merged into the final training set |
 
-**Spot-check notes:** *(fill in after running notebook)*
+**Notes:** the ~2:1 imbalance drives the choice of F1/ROC-AUC over accuracy; model-ready split is
+512,895 train / 128,224 test (M4-T7).
 
 ---
 
-## 3. Action Items
+## 3. Status
 
-- [ ] Run `notebooks/m2_eda.ipynb` and fill in the TBD fields above
-- [ ] Verify S3 uploads for both datasets
-- [ ] Mark Notion M2-T1 and M2-T2 as **Done** with S3 paths in Accomplishments
+- [x] EDA figures confirmed and recorded (via the M4 preprocessing + M4-T7 export)
+- [x] S3 uploads verified for both datasets
+- [x] Notion M2-T1 / M2-T2 marked **Done** with S3 paths
