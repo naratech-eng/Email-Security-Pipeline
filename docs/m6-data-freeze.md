@@ -46,10 +46,52 @@ a7e42eddec4799ad828ebfd8b1e52ae2ea04563cc8bda8f1465203c2ecffeaa3  url_train.csv
 - These duplicates already exist in the frozen M4-T7 split.
 - No re-splitting was performed.
 
+## Frozen S3 Paths
+
+Splits are stored in the project datasets bucket and must be downloaded from here by all M6 training tasks.
+
+```
+s3://email-security-pipeline-datasets/datasets/processed/splits/email_train.csv
+s3://email-security-pipeline-datasets/datasets/processed/splits/email_test.csv
+s3://email-security-pipeline-datasets/datasets/processed/splits/url_train.csv
+s3://email-security-pipeline-datasets/datasets/processed/splits/url_test.csv
+```
+
+AWS profile: `lab-user` · Region: `us-east-1`
+
+Download command:
+
+```bash
+mkdir -p data/processed
+for f in email_train email_test url_train url_test; do
+  aws s3 cp s3://email-security-pipeline-datasets/datasets/processed/splits/${f}.csv \
+            data/processed/${f}.csv --profile lab-user
+done
+```
+
+Verify after download (manifest uses bare filenames, so run from inside `data/processed/`):
+
+```bash
+# download manifest alongside the CSVs
+aws s3 cp s3://email-security-pipeline-datasets/datasets/processed/splits/SPLITS.sha256 \
+          data/processed/SPLITS.sha256 --profile lab-user
+
+cd data/processed && sha256sum -c SPLITS.sha256
+```
+
+## Verification Notebook
+
+`notebooks/M6/m6_t1_data_freeze.ipynb` — runs all checks programmatically:
+- SHA-256 checksum verification against `SPLITS.sha256`
+- Row counts and class balance per split
+- Train↔test leakage check for both tracks
+
+Run this notebook before starting any M6 model training task.
+
 ## References
 
-These frozen datasets will be used by:
+These frozen datasets are consumed by:
 
-- M6-T2 (email LinearSVC)
-- M6-T3 (URL char-CNN)
-- M6-T4 (URL Random Forest fallback)
+- M6-T2 (email LinearSVC) — `email_train.csv` / `email_test.csv`
+- M6-T3 (URL char-CNN) — `url_train.csv` / `url_test.csv`
+- M6-T4 (URL Random Forest fallback) — `url_train.csv` / `url_test.csv`
