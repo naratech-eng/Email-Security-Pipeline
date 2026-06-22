@@ -159,6 +159,9 @@ data/processed/*.csv
 # Model artifacts (serialized to S3, not git)
 models/
 
+# Generated registry manifest (uploaded to S3 by m6_t7_registry.ipynb, not committed)
+registry.json
+
 # Python
 __pycache__/
 *.py[cod]
