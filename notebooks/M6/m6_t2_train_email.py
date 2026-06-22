@@ -1,7 +1,16 @@
+"""M6-T2: Train and serialize the email LinearSVC classifier.
+
+Trains on the frozen M4-T7 email splits via the shared M5 harness and saves the
+full pipeline (TF-IDF vectorizer + LinearSVC) as a single joblib artifact.
+
+Run from anywhere:
+    python notebooks/M6/m6_t2_train_email.py
+"""
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "notebooks/M5")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "notebooks" / "M5"))
 
 from m5_harness import load_email, email_pipeline
 
@@ -26,9 +35,10 @@ print("\nTraining LinearSVC...")
 
 pipe.fit(etr, etr["label"])
 
-Path("models").mkdir(exist_ok=True)
+models_dir = REPO_ROOT / "models"
+models_dir.mkdir(exist_ok=True)
 
-artifact_path = "models/email_linearsvc.joblib"
+artifact_path = models_dir / "email_linearsvc.joblib"
 
 joblib.dump(pipe, artifact_path)
 

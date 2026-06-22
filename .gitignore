@@ -152,6 +152,9 @@ sample_notion.md
 # Project data (uploaded to S3)
 data/.DS_Store
 
+# Model artifacts (serialized to S3, not git)
+models/
+
 # Python
 __pycache__/
 *.py[cod]
