@@ -55,6 +55,44 @@ A small set of checks are **deliberately suppressed with inline `#checkov:skip=`
 
 Each suppression carries a one-line rationale at the resource in the Terraform, so reviewers (and graders) can see every decision was deliberate rather than overlooked. All are flagged to tighten before any production deployment.
 
+### 3.2 Application Security Testing — SAST
+
+Static Application Security Testing analyses our **own source code** (the IaC scans above only cover Terraform). SAST runs on every PR and is **shift-left / merge-blocking** on high-severity findings. Results are uploaded as **SARIF to the GitHub Security tab**.
+
+| Target | Tool | Catches |
+|---|---|---|
+| Python — API, `m6_inference.py`, extraction | **Bandit** + **Semgrep** (`p/python`, `p/owasp-top-ten`) | injection, unsafe deserialization, hardcoded secrets, `eval`/`subprocess` misuse |
+| Python — deep dataflow | **CodeQL** (`python`) | taint-tracking vulns across functions |
+| React / TypeScript dashboard | **Semgrep** (`p/javascript`, `p/react`) + **eslint-plugin-security** | DOM-XSS sinks, `dangerouslySetInnerHTML`, prototype pollution |
+| Secrets (full git history) | **gitleaks** | leaked keys/tokens beyond GitHub's native push-protection |
+| Quality + security gate | **SonarCloud** (hosted SonarQube — free for public repos) | bugs, code smells, security hotspots, coverage + quality gate on PRs |
+
+**Gate:** any **HIGH/CRITICAL** SAST finding blocks the PR merge. Findings are triaged; accepted risks get an inline suppression with a one-line justification (same convention as the IaC baseline in §3.1).
+
+### 3.3 Application Security Testing — DAST
+
+Dynamic Application Security Testing exercises the **running** service, so it runs **post-deploy** (against the dev/staging ECS service and the Amplify PR preview), plus a heavier nightly scan. DAST cannot run on a pure PR with no live target.
+
+| Target | Tool | Stage | Scan type |
+|---|---|---|---|
+| FastAPI inference API | **OWASP ZAP** | PR preview (passive baseline) + nightly (full active) | spidering, injection, headers, auth |
+| API contract / fuzzing | **Schemathesis** (from FastAPI OpenAPI schema) | post-deploy | property-based fuzzing of every endpoint |
+| Dashboard (Amplify preview) | **OWASP ZAP** (authenticated via Cognito token) | post-deploy | XSS, CSRF, security headers, auth bypass |
+| ALB TLS endpoint | **testssl.sh** / **sslyze** | nightly | weak ciphers, protocol downgrade, cert issues |
+| Mail server (relay/spoof) | **swaks** scripts (test-plan SEC-01/02) | staging | open relay, SPF/DKIM/DMARC bypass |
+
+**Gate:** the passive ZAP baseline runs on every preview (informational); a **HIGH** finding from the nightly full scan or Schemathesis **blocks promotion to `naratech`** (demo/prod) and is filed in the Issues & Blockers DB with an owner. Fail-open behaviour (S-07) is itself a DAST scenario: ZAP/Schemathesis hammering the API must never block mail flow.
+
+### 3.4 Where each control runs
+
+```
+PR opened ──► SAST (Bandit, Semgrep, CodeQL, gitleaks, eslint-security)  [BLOCKS MERGE]
+          └─► SCA + IaC (pip-audit, npm audit, Trivy, tfsec, Checkov)     [BLOCKS MERGE]
+merge to dev ──► deploy to dev/staging ──► DAST passive (ZAP baseline, Schemathesis smoke)
+nightly ──────► DAST full (ZAP active scan, Schemathesis fuzz, testssl)   [BLOCKS PROMOTION]
+promote to naratech ──► manual approval (no open HIGH DAST findings)
+```
+
 ## 4. Branching & Environments
 
 | Branch | Environment | Notes |
@@ -84,7 +122,7 @@ Amplify handles preview environments per PR for the dashboard automatically.
 - RDS encrypted at rest (KMS) and TLS in transit
 - S3: block public access account-wide, default encryption, versioning
 - CloudTrail enabled in all regions, logs to a dedicated S3 bucket
-- Optional: GuardDuty, AWS Config, Security Hub
+- **GuardDuty** (threat detection) + **Security Hub** (findings aggregation — our AWS-native SIEM layer) enabled; AWS Config optional
 
 ## 7. Code Hygiene
 
