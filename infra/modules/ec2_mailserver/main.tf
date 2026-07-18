@@ -79,6 +79,10 @@ resource "aws_instance" "mail" {
     mail_domain   = var.mail_domain
     mail_hostname = var.mail_hostname
   }))
+  # Cloud-init only runs on first boot — without this, editing cloud-init.yml
+  # later would silently update the stored user_data but never actually run
+  # on the live instance. Force a clean replace instead.
+  user_data_replace_on_change = true
 
   tags = {
     Name    = "${var.project}-mail-server"

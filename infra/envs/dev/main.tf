@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
@@ -39,11 +43,12 @@ module "s3_datasets" {
 }
 
 module "s3_models" {
-  source           = "../../modules/s3_bucket"
-  project          = var.project
-  purpose          = "models"
-  bucket_name      = "${var.project}-models-${var.aws_region}-802531654188"
-  enable_lifecycle = false
+  source                             = "../../modules/s3_bucket"
+  project                            = var.project
+  purpose                            = "models"
+  bucket_name                        = "${var.project}-models-${var.aws_region}-802531654188"
+  enable_lifecycle                   = false
+  noncurrent_version_expiration_days = 30 # OBS-T3
 }
 
 module "s3_logs" {
@@ -72,6 +77,19 @@ module "rds" {
   private_subnet_ids = module.network.private_subnet_ids
   sg_rds_id          = module.network.sg_rds_id
   db_password        = var.db_password
+}
+
+# --------------------------------------------------------------------------- #
+# Secrets Manager — app secrets for the FastAPI service (SEC-T3)
+# --------------------------------------------------------------------------- #
+module "secrets" {
+  source      = "../../modules/secrets_manager"
+  project     = var.project
+  environment = var.environment
+  db_username = module.rds.username
+  db_password = var.db_password
+  db_host     = module.rds.endpoint
+  db_name     = module.rds.db_name
 }
 
 # --------------------------------------------------------------------------- #
@@ -131,15 +149,25 @@ resource "aws_acm_certificate_validation" "esp" {
 # ECS Fargate
 # --------------------------------------------------------------------------- #
 module "ecs" {
-  source             = "../../modules/ecs_service"
-  project            = var.project
-  aws_region         = var.aws_region
-  environment        = var.environment
-  private_subnet_ids = module.network.private_subnet_ids
-  sg_ecs_id          = module.network.sg_ecs_id
-  public_tg_arn      = module.alb.public_tg_arn
-  internal_tg_arn    = module.alb.internal_tg_arn
-  model_bucket_name  = module.s3_models.bucket_id
+  source                     = "../../modules/ecs_service"
+  project                    = var.project
+  aws_region                 = var.aws_region
+  environment                = var.environment
+  private_subnet_ids         = module.network.private_subnet_ids
+  sg_ecs_id                  = module.network.sg_ecs_id
+  public_tg_arn              = module.alb.public_tg_arn
+  internal_tg_arn            = module.alb.internal_tg_arn
+  model_bucket_name          = module.s3_models.bucket_id
+  db_credentials_secret_arn  = module.secrets.db_credentials_arn
+  jwt_signing_key_secret_arn = module.secrets.jwt_signing_key_arn
+
+  # Target groups aren't usable by an ECS service until a listener has
+  # attached them to a load balancer. The TG ARN alone (public_tg_arn /
+  # internal_tg_arn above) doesn't carry that dependency, so without this,
+  # Terraform can create the ECS service in parallel with — or before — the
+  # ALB listeners finish, and AWS rejects it with "target group ... does not
+  # have an associated load balancer."
+  depends_on = [module.alb]
 }
 
 # --------------------------------------------------------------------------- #
@@ -225,4 +253,14 @@ output "models_bucket" {
 output "esp_acm_cert_arn" {
   value       = aws_acm_certificate_validation.esp.certificate_arn
   description = "Paste this ARN into Amplify console when setting esp.naratech.xyz custom domain"
+}
+
+output "db_credentials_secret_arn" {
+  value       = module.secrets.db_credentials_arn
+  description = "SEC-T3 — DB credentials, injected into the ECS task at runtime"
+}
+
+output "jwt_signing_key_secret_arn" {
+  value       = module.secrets.jwt_signing_key_arn
+  description = "SEC-T3 — JWT signing key, injected into the ECS task at runtime"
 }
