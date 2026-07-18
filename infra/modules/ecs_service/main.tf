@@ -70,6 +70,24 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
   })
 }
 
+# SEC-T3 — read-only access to exactly the two app secrets, nothing else
+resource "aws_iam_role_policy" "ecs_task_secrets" {
+  name = "app-secrets-read"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = [
+        var.db_credentials_secret_arn,
+        var.jwt_signing_key_secret_arn
+      ]
+    }]
+  })
+}
+
 # Task definition — placeholder image until M6 builds the real one
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project}-api"
@@ -94,6 +112,13 @@ resource "aws_ecs_task_definition" "api" {
 
     environment = [
       { name = "ENV", value = var.environment }
+    ]
+
+    # SEC-T3 — pulled from Secrets Manager at task startup, never plaintext
+    # in the task definition, CI logs, or the repo.
+    secrets = [
+      { name = "DB_CREDENTIALS_JSON", valueFrom = var.db_credentials_secret_arn },
+      { name = "JWT_SIGNING_KEY", valueFrom = var.jwt_signing_key_secret_arn }
     ]
 
     logConfiguration = {

@@ -79,4 +79,22 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
       }
     }
   }
+
+  # OBS-T3 — bound storage cost for versioned buckets (e.g. model artifacts)
+  # by expiring superseded versions after N days. Current version is never
+  # touched by this rule, so it's a pure rollback-window cap, not a retention
+  # cliff on the live artifact.
+  dynamic "rule" {
+    for_each = var.noncurrent_version_expiration_days > 0 ? [1] : []
+    content {
+      id     = "expire-noncurrent-versions"
+      status = "Enabled"
+
+      filter {}
+
+      noncurrent_version_expiration {
+        noncurrent_days = var.noncurrent_version_expiration_days
+      }
+    }
+  }
 }

@@ -31,6 +31,14 @@ variable "model_bucket_name" {
   type = string
 }
 
+variable "db_credentials_secret_arn" {
+  type = string
+}
+
+variable "jwt_signing_key_secret_arn" {
+  type = string
+}
+
 variable "container_image" {
   type    = string
   default = "public.ecr.aws/nginx/nginx:latest"
