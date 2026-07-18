@@ -23,9 +23,8 @@ Plan for the remaining milestones, mapped to the [PRD](prd.md) goals and [MoSCoW
 
 ### Backend / inference (Sanjeewa, Michael)
 - **M7-T1** FastAPI service — `/predict/email`, `/predict/url`, `/health` (Sanjeewa)
-- **M7-T2** Containerize service, CPU-only (Sanjeewa)
 - **M7-T3** MIME parsing + URL/body extraction → combined verdict (Michael)
-- **M7-T7** Push image to **ECR** + deploy to **ECS Fargate** behind **ALB** via Terraform (Michael) — *M-07*
+- **M7-T7** Containerize (Dockerfile + healthcheck) + push to **ECR** + deploy to **ECS Fargate** behind **ALB** via Terraform (Michael) — *M-07* (folds former M7-T2)
 - **M7-T9** content_filter client script (POSTs JSON to API/ALB) (Sanjeewa)
 - **M7-T16** Fail-open / circuit-breaker so mail flow never blocks (Sanjeewa) — *S-07*
 
@@ -96,7 +95,7 @@ Plan for the remaining milestones, mapped to the [PRD](prd.md) goals and [MoSCoW
 ## Critical path
 
 ```
-M6 artifacts ─► M7-T1 API ─► M7-T2 container ─► M7-T7 ECS deploy
+M6 artifacts ─► M7-T1 API ─► M7-T7 containerize + ECS deploy
                    │                                  │
                    ├─► M7-T3 extraction ──────────────┤
                    ├─► M7-T9 filter script ─► M7-T4 Postfix hook ─► M7-T5 quarantine

@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6B7280"/>
+    </marker>
+    <marker id="arrowP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7C3AED"/>
+    </marker>
+    <marker id="arrowV" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8B5CF6"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+  <text x="60" y="70" font-size="40" font-weight="bold" fill="#2E1065">System Context</text>
+  <text x="60" y="112" font-size="26" fill="#6B7280">Two public entry points — everything else private in the VPC</text>
+
+  <!-- AWS boundary -->
+  <rect x="560" y="150" width="990" height="700" rx="18" fill="#FAF5FF" stroke="#DDD6FE" stroke-width="3" stroke-dasharray="12 8"/>
+  <text x="590" y="195" font-size="24" font-weight="bold" fill="#A78BFA">AWS CLOUD</text>
+
+  <!-- Actors (left) -->
+  <g>
+    <circle cx="150" cy="230" r="26" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+    <rect x="105" y="262" width="90" height="46" rx="23" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+    <text x="150" y="345" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">External</text>
+    <text x="150" y="375" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">Sender</text>
+  </g>
+  <g>
+    <circle cx="150" cy="480" r="26" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+    <rect x="105" y="512" width="90" height="46" rx="23" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+    <text x="150" y="595" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">Internal</text>
+    <text x="150" y="625" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">User</text>
+  </g>
+  <g>
+    <circle cx="150" cy="710" r="26" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+    <rect x="105" y="742" width="90" height="46" rx="23" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+    <text x="150" y="825" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">Security</text>
+    <text x="150" y="855" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">Operator</text>
+  </g>
+
+  <!-- Mail server box -->
+  <rect x="620" y="220" width="330" height="170" rx="14" fill="#FCE7F3" stroke="#DB2777" stroke-width="3"/>
+  <text x="785" y="272" font-size="30" font-weight="bold" fill="#2E1065" text-anchor="middle">Mail Server</text>
+  <text x="785" y="308" font-size="24" fill="#52525B" text-anchor="middle">Postfix + Dovecot</text>
+  <text x="785" y="340" font-size="24" fill="#52525B" text-anchor="middle">Rocky Linux 9 · EC2</text>
+  <text x="785" y="374" font-size="22" font-weight="bold" fill="#BE185D" text-anchor="middle">mail.naratech.xyz</text>
+
+  <!-- Dashboard box -->
+  <rect x="620" y="620" width="330" height="160" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="785" y="670" font-size="30" font-weight="bold" fill="#2E1065" text-anchor="middle">Dashboard</text>
+  <text x="785" y="704" font-size="24" fill="#52525B" text-anchor="middle">React · AWS Amplify</text>
+  <text x="785" y="736" font-size="24" fill="#52525B" text-anchor="middle">Cognito sign-in</text>
+  <text x="785" y="768" font-size="22" font-weight="bold" fill="#7C3AED" text-anchor="middle">esp.naratech.xyz</text>
+
+  <!-- Inference service -->
+  <rect x="1040" y="390" width="300" height="180" rx="14" fill="#EDE9FE" stroke="#6D28D9" stroke-width="4"/>
+  <text x="1190" y="442" font-size="29" font-weight="bold" fill="#2E1065" text-anchor="middle">Inference Service</text>
+  <text x="1190" y="478" font-size="24" fill="#52525B" text-anchor="middle">FastAPI · ECS Fargate</text>
+  <text x="1190" y="510" font-size="24" fill="#52525B" text-anchor="middle">/score · /score-url</text>
+  <text x="1190" y="544" font-size="22" font-weight="bold" fill="#6D28D9" text-anchor="middle">esp-api.naratech.xyz</text>
+
+  <!-- S3 (right of API) -->
+  <g>
+    <path d="M 1400 515 a 72 18 0 0 0 144 0 v -100 a 72 18 0 0 0 -144 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="1472" cy="415" rx="72" ry="18" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="1472" y="575" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">S3</text>
+    <text x="1472" y="605" font-size="23" fill="#52525B" text-anchor="middle">model artifacts</text>
+  </g>
+
+  <!-- RDS (below API) -->
+  <g>
+    <path d="M 1105 745 a 85 20 0 0 0 170 0 v -95 a 85 20 0 0 0 -170 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="1190" cy="650" rx="85" ry="20" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="1190" y="800" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">RDS Postgres</text>
+    <text x="1190" y="830" font-size="23" fill="#52525B" text-anchor="middle">detections</text>
+  </g>
+
+  <!-- Arrows -->
+  <!-- sender -> mail -->
+  <line x1="205" y1="280" x2="612" y2="280" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <text x="405" y="262" font-size="24" font-weight="bold" fill="#DB2777" text-anchor="middle">SMTP · port 25</text>
+  <!-- user -> mail (IMAP) -->
+  <line x1="205" y1="520" x2="612" y2="340" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <text x="390" y="408" font-size="24" fill="#6B7280" text-anchor="middle">IMAP</text>
+  <!-- operator -> dashboard -->
+  <line x1="205" y1="750" x2="612" y2="712" stroke="#7C3AED" stroke-width="3.5" marker-end="url(#arrowP)"/>
+  <text x="400" y="702" font-size="24" font-weight="bold" fill="#7C3AED" text-anchor="middle">HTTPS</text>
+  <!-- mail -> api (elbow) -->
+  <path d="M 950 295 L 1190 295 L 1190 382" fill="none" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <text x="1075" y="278" font-size="23" fill="#6B7280" text-anchor="middle">internal ALB</text>
+  <!-- dashboard -> api (elbow) -->
+  <path d="M 860 612 L 860 480 L 1032 480" fill="none" stroke="#7C3AED" stroke-width="3.5" marker-end="url(#arrowP)"/>
+  <text x="948" y="462" font-size="23" font-weight="bold" fill="#7C3AED" text-anchor="middle">HTTPS via ALB</text>
+  <!-- api -> s3 -->
+  <line x1="1345" y1="470" x2="1392" y2="470" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <!-- api -> rds -->
+  <line x1="1190" y1="575" x2="1190" y2="622" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <!-- dashboard -> rds read (dashed) -->
+  <path d="M 952 745 Q 1030 800 1098 730" fill="none" stroke="#8B5CF6" stroke-width="3" stroke-dasharray="10 8" marker-end="url(#arrowV)"/>
+  <text x="1015" y="838" font-size="23" fill="#8B5CF6" text-anchor="middle">read detections</text>
+</svg>

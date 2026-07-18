@@ -97,12 +97,13 @@ promote to naratech ──► manual approval (no open HIGH DAST findings)
 
 | Branch | Environment | Notes |
 |---|---|---|
-| `feature/*` | none | CI checks run on PR; plan posted as PR comment |
+| `feature/*` | none | per-feature branches; CI checks run on PR; plan posted as PR comment |
+| `dev-<name>` | none | personal working branches (`dev-nara`, `dev-michael`, …); same PR checks apply |
 | `dev` | dev | `terraform apply` runs automatically on merge |
-| `naratech` | prod (demo) | manual approval gate before apply |
+| `naratech` | prod (demo) | main branch; manual approval gate before apply |
 | tagged release `v*` | prod (demo) | alias for naratech-based releases |
 
-Flow: `feature/… → dev → naratech`
+Flow: `feature/… / dev-<name> → dev → naratech`
 
 Amplify handles preview environments per PR for the dashboard automatically.
 

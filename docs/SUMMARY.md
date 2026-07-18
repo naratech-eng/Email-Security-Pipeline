@@ -4,9 +4,11 @@
 
 ## Product
 
+* [Project Proposal](proposal.md)
 * [Product Requirements (PRD)](prd.md)
 * [MoSCoW Requirements](requirements-moscow.md)
 * [Roadmap](roadmap.md)
+* [Presentation Outline](presentation-outline.md)
 
 ## Engineering
 

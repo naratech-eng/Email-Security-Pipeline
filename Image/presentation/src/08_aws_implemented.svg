@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6B7280"/>
+    </marker>
+    <marker id="arrowV" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8B5CF6"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#FFFFFF"/>
+  <text x="60" y="62" font-size="34" font-weight="bold" fill="#2E1065">AWS Implementation Baseline — Deployed Resources</text>
+  <text x="60" y="100" font-size="22" fill="#6B7280">Stood up from infra/envs/dev with a single terraform apply · region us-east-1</text>
+
+  <!-- DNS chain -->
+  <rect x="60" y="150" width="250" height="90" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="185" y="188" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">Namecheap</text>
+  <text x="185" y="218" font-size="19" fill="#52525B" text-anchor="middle">naratech.xyz registrar</text>
+
+  <line x1="310" y1="195" x2="612" y2="195" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <text x="460" y="178" font-size="20" fill="#6B7280" text-anchor="middle">NS delegation</text>
+
+  <rect x="620" y="150" width="320" height="90" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="780" y="188" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">Route53</text>
+  <text x="780" y="218" font-size="19" fill="#52525B" text-anchor="middle">3 hosted zones</text>
+
+  <!-- AWS region box -->
+  <rect x="60" y="280" width="1480" height="660" rx="18" fill="#FAF5FF" stroke="#DDD6FE" stroke-width="3" stroke-dasharray="12 8"/>
+  <text x="90" y="320" font-size="22" font-weight="bold" fill="#A78BFA">AWS · us-east-1</text>
+
+  <!-- VPC -->
+  <rect x="100" y="340" width="900" height="400" rx="16" fill="#FFFFFF" stroke="#C4B5FD" stroke-width="2.5" stroke-dasharray="10 7"/>
+  <text x="130" y="378" font-size="21" font-weight="bold" fill="#A78BFA">VPC</text>
+
+  <rect x="150" y="400" width="260" height="130" rx="14" fill="#FCE7F3" stroke="#DB2777" stroke-width="3"/>
+  <text x="280" y="440" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">EC2 t3.small</text>
+  <text x="280" y="470" font-size="20" fill="#52525B" text-anchor="middle">Rocky Linux 9</text>
+  <text x="280" y="498" font-size="20" fill="#52525B" text-anchor="middle">Postfix + Dovecot</text>
+
+  <rect x="480" y="400" width="260" height="130" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="610" y="445" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">Public ALB</text>
+  <text x="610" y="478" font-size="20" fill="#52525B" text-anchor="middle">HTTPS · ACM certs</text>
+
+  <rect x="480" y="590" width="260" height="120" rx="14" fill="#EDE9FE" stroke="#6D28D9" stroke-width="4"/>
+  <text x="610" y="635" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">ECS cluster</text>
+  <text x="610" y="668" font-size="20" fill="#52525B" text-anchor="middle">esp-cluster</text>
+
+  <g>
+    <path d="M 195 672 a 85 18 0 0 0 170 0 v -82 a 85 18 0 0 0 -170 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="280" cy="590" rx="85" ry="18" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="280" y="640" font-size="22" font-weight="bold" fill="#2E1065" text-anchor="middle">RDS PostgreSQL</text>
+    <text x="280" y="668" font-size="19" fill="#52525B" text-anchor="middle">esp-postgres</text>
+  </g>
+
+  <line x1="610" y1="530" x2="610" y2="582" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <line x1="480" y1="650" x2="373" y2="650" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+
+  <!-- Right column: Amplify, Cognito, ECR -->
+  <rect x="1290" y="360" width="250" height="130" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="1415" y="400" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">AWS Amplify</text>
+  <text x="1415" y="430" font-size="20" fill="#52525B" text-anchor="middle">frontend</text>
+  <text x="1415" y="458" font-size="20" fill="#52525B" text-anchor="middle">esp.naratech.xyz</text>
+
+  <rect x="1290" y="560" width="250" height="110" rx="14" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+  <text x="1415" y="603" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">Cognito</text>
+  <text x="1415" y="633" font-size="19" fill="#52525B" text-anchor="middle">User Pool + app client</text>
+
+  <path d="M 1415 552 L 1415 498" fill="none" stroke="#8B5CF6" stroke-width="3" stroke-dasharray="9 7" marker-end="url(#arrowV)"/>
+  <text x="1447" y="530" font-size="19" fill="#8B5CF6">JWT</text>
+
+  <rect x="1050" y="590" width="190" height="120" rx="14" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+  <text x="1145" y="638" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">ECR</text>
+  <text x="1145" y="668" font-size="20" fill="#52525B" text-anchor="middle">esp-api</text>
+
+  <path d="M 1042 650 L 748 650" fill="none" stroke="#8B5CF6" stroke-width="3" stroke-dasharray="9 7" marker-end="url(#arrowV)"/>
+  <text x="895" y="632" font-size="19" fill="#8B5CF6" text-anchor="middle">container images</text>
+
+  <!-- Route53 record arrows -->
+  <line x1="700" y1="240" x2="285" y2="392" stroke="#6B7280" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="420" y="314" font-size="20" font-weight="bold" fill="#7C3AED" text-anchor="middle">A · mail.naratech.xyz</text>
+  <line x1="780" y1="240" x2="615" y2="392" stroke="#6B7280" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="740" y="286" font-size="20" font-weight="bold" fill="#7C3AED" text-anchor="start">alias · esp-api.naratech.xyz</text>
+  <line x1="940" y1="210" x2="1400" y2="352" stroke="#6B7280" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="1160" y="252" font-size="20" font-weight="bold" fill="#7C3AED" text-anchor="middle">CNAME · esp.naratech.xyz</text>
+
+  <!-- S3 row -->
+  <g>
+    <path d="M 175 875 a 85 18 0 0 0 170 0 v -85 a 85 18 0 0 0 -170 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="260" cy="790" rx="85" ry="18" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="260" y="845" font-size="21" font-weight="bold" fill="#2E1065" text-anchor="middle">S3 esp-datasets</text>
+  </g>
+  <g>
+    <path d="M 475 875 a 85 18 0 0 0 170 0 v -85 a 85 18 0 0 0 -170 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="560" cy="790" rx="85" ry="18" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="560" y="845" font-size="21" font-weight="bold" fill="#2E1065" text-anchor="middle">S3 esp-models</text>
+  </g>
+  <g>
+    <path d="M 775 875 a 85 18 0 0 0 170 0 v -85 a 85 18 0 0 0 -170 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="860" cy="790" rx="85" ry="18" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="860" y="845" font-size="21" font-weight="bold" fill="#2E1065" text-anchor="middle">S3 esp-logs</text>
+  </g>
+  <g>
+    <path d="M 1090 875 a 130 18 0 0 0 260 0 v -85 a 130 18 0 0 0 -260 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="1220" cy="790" rx="130" ry="18" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="1220" y="838" font-size="21" font-weight="bold" fill="#2E1065" text-anchor="middle">S3 tfstate bucket</text>
+    <text x="1220" y="864" font-size="19" fill="#52525B" text-anchor="middle">+ DynamoDB lock esp-tflock</text>
+  </g>
+
+  <line x1="595" y1="712" x2="570" y2="768" stroke="#6B7280" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="680" y="748" font-size="19" fill="#6B7280" text-anchor="middle">model artifacts</text>
+</svg>
