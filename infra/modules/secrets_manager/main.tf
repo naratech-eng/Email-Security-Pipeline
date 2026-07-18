@@ -12,6 +12,7 @@ resource "random_password" "jwt_signing_key" {
 
 resource "aws_secretsmanager_secret" "db_credentials" {
   #checkov:skip=CKV_AWS_149: Uses the AWS-managed secretsmanager key (no extra cost); a dedicated CMK is deferred for the budget lab
+  #checkov:skip=CKV2_AWS_57: Automatic rotation requires a Lambda rotator and app coordination, deferred for the budget lab
   name                    = "${var.project}/${var.environment}/db-credentials"
   recovery_window_in_days = 0 # instant delete on destroy — fits the OPS-T1 destroy/rebuild runbook
   tags                    = { Project = var.project }
@@ -30,6 +31,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
 
 resource "aws_secretsmanager_secret" "jwt_signing_key" {
   #checkov:skip=CKV_AWS_149: Uses the AWS-managed secretsmanager key (no extra cost); a dedicated CMK is deferred for the budget lab
+  #checkov:skip=CKV2_AWS_57: Automatic rotation requires a Lambda rotator and app coordination, deferred for the budget lab
   name                    = "${var.project}/${var.environment}/jwt-signing-key"
   recovery_window_in_days = 0
   tags                    = { Project = var.project }
