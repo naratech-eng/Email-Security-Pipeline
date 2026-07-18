@@ -160,6 +160,14 @@ module "ecs" {
   model_bucket_name          = module.s3_models.bucket_id
   db_credentials_secret_arn  = module.secrets.db_credentials_arn
   jwt_signing_key_secret_arn = module.secrets.jwt_signing_key_arn
+
+  # Target groups aren't usable by an ECS service until a listener has
+  # attached them to a load balancer. The TG ARN alone (public_tg_arn /
+  # internal_tg_arn above) doesn't carry that dependency, so without this,
+  # Terraform can create the ECS service in parallel with — or before — the
+  # ALB listeners finish, and AWS rejects it with "target group ... does not
+  # have an associated load balancer."
+  depends_on = [module.alb]
 }
 
 # --------------------------------------------------------------------------- #
