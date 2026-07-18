@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6B7280"/>
+    </marker>
+    <marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6D28D9"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+  <text x="60" y="70" font-size="40" font-weight="bold" fill="#2E1065">Two Clients, One Backend</text>
+  <text x="60" y="112" font-size="26" fill="#6B7280">The dashboard upload feature builds the same integration the mail filter uses</text>
+
+  <!-- Clients group -->
+  <rect x="80" y="180" width="440" height="560" rx="18" fill="#FAF5FF" stroke="#DDD6FE" stroke-width="3"/>
+  <text x="300" y="230" font-size="28" font-weight="bold" fill="#A78BFA" text-anchor="middle">CLIENTS</text>
+
+  <rect x="130" y="270" width="340" height="170" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="300" y="330" font-size="30" font-weight="bold" fill="#2E1065" text-anchor="middle">Upload Tool</text>
+  <text x="300" y="368" font-size="25" fill="#52525B" text-anchor="middle">Amplify dashboard</text>
+  <text x="300" y="402" font-size="23" fill="#52525B" text-anchor="middle">Phase A · MVP demo</text>
+
+  <rect x="130" y="500" width="340" height="170" rx="14" fill="#FCE7F3" stroke="#DB2777" stroke-width="3"/>
+  <text x="300" y="560" font-size="30" font-weight="bold" fill="#2E1065" text-anchor="middle">Postfix</text>
+  <text x="300" y="598" font-size="25" fill="#52525B" text-anchor="middle">content_filter</text>
+  <text x="300" y="632" font-size="23" fill="#52525B" text-anchor="middle">Phase B · live mail flow</text>
+
+  <!-- Backend -->
+  <rect x="700" y="300" width="420" height="320" rx="18" fill="#FAF5FF" stroke="#6D28D9" stroke-width="3" stroke-dasharray="12 8"/>
+  <text x="910" y="348" font-size="26" font-weight="bold" fill="#6D28D9" text-anchor="middle">ECS FARGATE</text>
+  <rect x="740" y="380" width="340" height="190" rx="14" fill="#EDE9FE" stroke="#6D28D9" stroke-width="4"/>
+  <text x="910" y="448" font-size="32" font-weight="bold" fill="#2E1065" text-anchor="middle">FastAPI</text>
+  <text x="910" y="488" font-size="28" fill="#52525B" text-anchor="middle">Inference Service</text>
+  <text x="910" y="526" font-size="26" fill="#6D28D9" text-anchor="middle" font-weight="bold">one scoring brain</text>
+
+  <!-- Stores -->
+  <g>
+    <path d="M 1270 490 a 90 22 0 0 0 180 0 v -60 a 90 22 0 0 0 -180 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="1360" cy="430" rx="90" ry="22" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="1360" y="552" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">RDS Postgres</text>
+    <text x="1360" y="584" font-size="23" fill="#52525B" text-anchor="middle">detections · source = upload | server</text>
+  </g>
+  <g>
+    <path d="M 1280 250 a 80 20 0 0 0 160 0 v -55 a 80 20 0 0 0 -160 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="1360" cy="195" rx="80" ry="20" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <text x="1360" y="330" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">S3 · model artifacts</text>
+  </g>
+
+  <!-- Arrows: clients -> api -->
+  <line x1="470" y1="355" x2="732" y2="430" stroke="#6D28D9" stroke-width="4" marker-end="url(#arrowD)"/>
+  <line x1="470" y1="585" x2="732" y2="510" stroke="#6D28D9" stroke-width="4" marker-end="url(#arrowD)"/>
+  <rect x="520" y="425" width="200" height="56" rx="28" fill="#6D28D9"/>
+  <text x="620" y="462" font-size="26" font-weight="bold" fill="#FFFFFF" text-anchor="middle">POST /score</text>
+
+  <!-- api -> stores -->
+  <line x1="1120" y1="440" x2="1262" y2="445" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <line x1="1090" y1="380" x2="1272" y2="240" stroke="#6B7280" stroke-width="3.5" marker-end="url(#arrow)"/>
+
+  <!-- Bottom callout -->
+  <rect x="80" y="770" width="1440" height="110" rx="14" fill="#FDF2F8" stroke="#EC4899" stroke-width="2.5"/>
+  <text x="800" y="815" font-size="25" fill="#2E1065" text-anchor="middle">Both clients hit the <tspan font-weight="bold">same endpoint</tspan> and write to the <tspan font-weight="bold">same detections table</tspan></text>
+  <text x="800" y="852" font-size="25" fill="#52525B" text-anchor="middle">→ one unified dashboard view · Phase B needs no new ML work</text>
+</svg>
