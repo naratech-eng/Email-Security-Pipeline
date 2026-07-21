@@ -32,7 +32,7 @@ RANDOM_STATE = 42
 CV = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 
 EMAIL_TEXT = 'text_clean'
-EMAIL_NUM  = ['urgency_score', 'word_count', 'avg_word_length']
+EMAIL_NUM  = ['urgency_score', 'link_count', 'html_ratio', 'word_count', 'avg_word_length']
 URL_FEATS  = ['url_length', 'hostname_length', 'num_dots', 'num_hyphens', 'num_at',
               'num_digits', 'num_special_chars', 'has_ip', 'has_https',
               'num_subdomains', 'is_shortened']

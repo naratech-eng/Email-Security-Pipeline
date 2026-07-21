@@ -11,15 +11,16 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
 
 ## Milestone Plan
 
-### M1 — Understanding Phishing Threats
+### M1 — Understanding Phishing Threats ✅ Complete
 - Deliverables: Research presentation, no formal report required
 - Exit: Team can describe phishing types, URL tactics, and detection approaches confidently
 
-### M2 — Dataset Collection
+### M2 — Dataset Collection ✅ Complete
 - Deliverables: Datasets imported, dataset README, presentation + report
 - Exit: At least one phishing email dataset, one URL dataset, one clean email dataset are versioned and documented
+- **Outcome:** phishing-email dataset (~82.5k rows) and malicious-URL dataset (~651k) imported to S3 and documented; see [Dataset EDA](datasets/eda.md).
 
-### M3 — AWS Foundation + Email Server (Rocky Linux on EC2)
+### M3 — AWS Foundation + Email Server (Rocky Linux on EC2) ✅ Complete
 - Deliverables:
   - Existing AWS baseline from M2 reviewed and reused, especially IAM and the datasets S3 bucket
   - Terraform codifies or extends the required AWS foundation for later milestones
@@ -27,18 +28,28 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
   - Setup runbook in `docs/`
   - Budget alerts and MFA confirmed for the active AWS account
 - Exit: Terraform can reproduce or extend the agreed infra baseline, and the Rocky Linux mail server successfully sends and receives test emails between two local accounts
+- **Outcome:** Terraform baseline live; Postfix + Dovecot mail server verified (local delivery works, open-relay rejected). See the [destroy/rebuild runbook](runbook-destroy-rebuild.md).
 
-### M4 — Data Preprocessing
+### M4 — Data Preprocessing ✅ Complete
 - Deliverables: Preprocessing pipeline, processed dataset, feature documentation
 - Exit: Reproducible script that produces a feature matrix from raw data
+- **Outcome:** reproducible pipeline produced the email feature matrix (82,078 rows) and 11-feature URL matrix (641,119 rows), exported as stratified train/test splits. See the [Feature Matrix](data/feature-matrix.md).
 
-### M5 — ML Model Selection
+### M5 — ML Model Selection ✅ Complete
 - Deliverables: Model comparison table, selection rationale, presentation + report
 - Exit: A primary model is selected with clear justification
+- **Outcome:** benchmarked 11 models across both tracks via a shared harness. Selected
+  **LinearSVC** for email (F1 ≈ 0.99) and a **character-level CNN** for URLs (F1 ≈ 0.97), with
+  Random Forest as a CPU fallback. DistilBERT was evaluated and rejected (a 0.4% gain for ~258×
+  the cost). See [Model Selection](machine-learning.md).
 
 ### M6 — Model Training & Testing
-- Deliverables: Trained model artifact, evaluation report (accuracy, precision, recall, F1)
+- Deliverables: Trained model artifacts, evaluation report (accuracy, precision, recall, F1, ROC-AUC)
 - Exit: Test metrics meet targets in PRD §6 or have a documented improvement plan
+- Scope: freeze the M4-T7 splits; train + serialize the email LinearSVC (+ TF-IDF vectorizer), the
+  URL char-CNN (+ char-vocab), and the RF fallback; evaluate vs PRD targets with threshold tuning;
+  package a per-track `predict()` interface; and store versioned artifacts in S3 for M7.
+- Note: the char-CNN trains on GPU (Colab) but **serves on CPU**, so no AWS GPU is needed.
 
 ### M7 — Inference Service + Dashboard Upload (Phase A) and Mail Integration (Phase B)
 - **Phase A (first half of M7):** FastAPI on ECS Fargate, Amplify dashboard with upload tool calling `/score`

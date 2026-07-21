@@ -11,6 +11,13 @@ Phishing remains one of the most common entry points for serious security incide
 3. Shares one **FastAPI inference service** (deployed to **ECS Fargate**) between both modes.
 4. Runs entirely on **AWS**, provisioned with **Terraform**, with **DevSecOps** controls baked into every pull request.
 
+## Current status
+
+Model selection (**M5**) is complete. The chosen classifiers are **LinearSVC** for the email track
+(F1 ≈ 0.99) and a **character-level CNN** for the URL track (F1 ≈ 0.97), with Random Forest as a
+CPU-only URL fallback. Work is now in **M6 (Model Training & Testing)** — training the final
+artifacts and evaluating them against the [PRD §6](prd.md) targets. See [Model Selection](machine-learning.md).
+
 ## Documentation map
 
 ### Product
@@ -24,6 +31,11 @@ Phishing remains one of the most common entry points for serious security incide
 - [DevSecOps](devsecops.md)
 - [Threat Model](threat-model.md)
 - [Test Plan](test-plan.md)
+
+### Machine Learning
+- [Model Selection (overview)](machine-learning.md)
+- [Model Comparison & Selection (M5-T5)](m5-t5-model-comparison.md)
+- [Deep-Learning Stretch (M5-T7/T8)](m5-t7-t8-deep-learning.md)
 
 ### Decisions
 - [Architecture Decision Records](adr/0001-record-architecture-decisions.md)
