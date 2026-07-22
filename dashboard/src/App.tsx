@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Authenticator } from '@aws-amplify/ui-react';
+import '@aws-amplify/ui-react/styles.css';
 
 type Detection = {
   id: string;
@@ -17,7 +19,7 @@ const sampleDetections: Detection[] = [
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'https://esp-api.naratech.xyz';
 const siteName = import.meta.env.VITE_SITE_NAME ?? 'SecureInbox';
 
-function App() {
+function Dashboard() {
   const [email, setEmail] = useState('');
   const [detections, setDetections] = useState<Detection[]>(sampleDetections);
   const [loading, setLoading] = useState(false);
@@ -156,6 +158,37 @@ function App() {
         </section>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Authenticator hideSignUp loginMechanisms={['username']}>
+      {({ signOut, user }) => (
+        <>
+          <div className="flex items-center justify-between bg-slate-900 border-b border-slate-700 px-6 py-4">
+            <div>
+              <h2 className="text-white font-semibold text-lg">
+                SecureInbox Dashboard
+              </h2>
+
+              <p className="text-slate-300 text-sm">
+                Signed in as {user?.username}
+              </p>
+            </div>
+
+            <button
+              onClick={signOut}
+              className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+            >
+              Sign Out
+            </button>
+          </div>
+
+          <Dashboard />
+        </>
+      )}
+    </Authenticator>
   );
 }
 
