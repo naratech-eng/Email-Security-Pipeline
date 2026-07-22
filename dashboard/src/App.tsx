@@ -9,6 +9,8 @@ type Detection = {
   subject: string;
   verdict: string;
   score: number;
+  model?: string;
+  urls?: string[];
 };
 
 const sampleDetections: Detection[] = [
@@ -21,11 +23,26 @@ const siteName = import.meta.env.VITE_SITE_NAME ?? 'SecureInbox';
 
 function Dashboard() {
   const [email, setEmail] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [detections, setDetections] = useState<Detection[]>(sampleDetections);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+ const handleFileUpload = async (
+  event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+  const file = event.target.files?.[0];
+
+  if (!file) return;
+
+  setSelectedFile(file);
+
+  const text = await file.text();
+
+  setEmail(text);
+  };
   const submitEmail = async () => {
+
     if (!email.trim()) {
       setApiError('Paste a raw email before submitting.');
       return;
@@ -91,6 +108,29 @@ function Dashboard() {
               <span className="rounded-full bg-slate-800 px-3 py-1 text-sm text-slate-300">API: {apiBaseUrl}/score</span>
             </div>
 
+<div className="mb-4">
+  <input
+    type="file"
+    accept=".txt,.eml"
+    onChange={handleFileUpload}
+    className="block w-full text-sm text-slate-300
+      file:mr-4
+      file:rounded-lg
+      file:border-0
+      file:bg-cyan-500
+      file:px-4
+      file:py-2
+      file:text-slate-950
+      file:font-semibold
+      hover:file:bg-cyan-400"
+  />
+
+  {selectedFile && (
+    <p className="mt-2 text-sm text-cyan-400">
+      Selected: {selectedFile.name}
+    </p>
+  )}
+</div>
             <textarea
               className="h-72 w-full resize-none rounded-3xl border border-slate-800 bg-slate-950 px-4 py-4 text-sm leading-6 text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
               placeholder="Paste raw email source here..."
