@@ -43,6 +43,23 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# M7-T4 — read-only access to exactly the one secret this instance needs:
+# the JWT signing key, fetched once at boot to authenticate content_filter
+# calls to the internal inference API.
+resource "aws_iam_role_policy" "jwt_secret_read" {
+  name = "jwt-signing-key-read"
+  role = aws_iam_role.ssm.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = [var.jwt_signing_key_secret_arn]
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "ssm" {
   name = "${var.project}-mail-ssm-profile"
   role = aws_iam_role.ssm.name
@@ -76,8 +93,10 @@ resource "aws_instance" "mail" {
   }
 
   user_data = base64encode(templatefile("${path.module}/cloud-init.yml", {
-    mail_domain   = var.mail_domain
-    mail_hostname = var.mail_hostname
+    mail_domain                = var.mail_domain
+    mail_hostname              = var.mail_hostname
+    jwt_signing_key_secret_arn = var.jwt_signing_key_secret_arn
+    api_internal_url           = var.api_internal_url
   }))
   # Cloud-init only runs on first boot — without this, editing cloud-init.yml
   # later would silently update the stored user_data but never actually run
