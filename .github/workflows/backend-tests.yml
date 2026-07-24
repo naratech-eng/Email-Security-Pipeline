@@ -21,6 +21,26 @@ jobs:
       id-token: write
       contents: read
 
+    # M7-T15 — real Postgres, not mocks, so the detections-store tests
+    # (tests/test_integration_detections.py) exercise the actual schema.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: espuser
+          POSTGRES_PASSWORD: esppass
+          POSTGRES_DB: espdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U espuser"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_CREDENTIALS_JSON: '{"username":"espuser","password":"esppass","host":"127.0.0.1","port":5432,"dbname":"espdb"}'
+
     steps:
       - uses: actions/checkout@v6
 
@@ -45,6 +65,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest
+        working-directory: backend
+
+      - name: Run detections table migration
+        run: alembic upgrade head
         working-directory: backend
 
       - name: Run unit + integration tests

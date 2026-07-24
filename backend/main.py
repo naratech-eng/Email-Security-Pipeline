@@ -18,9 +18,10 @@ import math
 import os
 from typing import Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
+import db
 from inference import predict_email, predict_url
 from mime_parser import MimeEmail, body_features, normalize_text
 
@@ -122,9 +123,32 @@ class AnalyzeResponse(BaseModel):
     verdict: str
     likelihood: float  # worst-case signal across email + all URLs
     summary: str
+    remediation: str
     email: PredictResponse
     urls: list[UrlDetail]
     metadata: EmailMetadata
+
+
+class DetectionRecord(BaseModel):
+    id: int
+    created_at: str
+    source: str
+    submitted_by: Optional[str]
+    verdict: str
+    likelihood: float
+    summary: str
+    remediation: str
+    from_addr: Optional[str]
+    to_addr: Optional[str]
+    subject: Optional[str]
+    email_date: Optional[str]
+    num_urls: int
+    attachment_count: int
+    email_score: Optional[float]
+    email_model: Optional[str]
+    email_reason: Optional[str]
+    email_features: Optional[dict]
+    urls: list
 
 
 # The direction that makes each URL feature suspicious, so the dashboard can
@@ -159,6 +183,23 @@ def _url_reason(verdict: str, feats: dict) -> str:
                if is_bad(feats.get(key, 0))]
     detail = '; '.join(signals) if signals else 'suspicious URL character patterns'
     return f'Flagged on URL structure: {detail}.'
+
+
+def _remediation(verdict: str, bad_url_count: int) -> str:
+    if verdict == 'clean':
+        return 'No action needed — no phishing indicators detected.'
+    if verdict == 'flag':
+        parts = ['Review manually before acting on this message.']
+        if bad_url_count:
+            parts.append('Do not click the flagged link(s) until verified.')
+        parts.append('Confirm sender identity through a separate channel if in doubt.')
+        return ' '.join(parts)
+    # quarantine
+    parts = ['Do not click any links or open any attachments in this message.']
+    if bad_url_count:
+        parts.append(f'{bad_url_count} URL(s) were flagged as malicious.')
+    parts.append('Report to IT/security and delete after review.')
+    return ' '.join(parts)
 
 
 def _score_email_text(text_clean: str, feats: dict) -> dict:
@@ -224,7 +265,13 @@ def predict_url_route(req: UrlPredictRequest):
 async def analyze_email_route(
     text: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
+    # M7-T15 — 'upload' (dashboard paste/upload) vs 'server' (mail content_filter).
+    # submitted_by is the Cognito username, only meaningful for 'upload'.
+    source: str = Form('upload'),
+    submitted_by: Optional[str] = Form(None),
 ):
+    if source not in ('upload', 'server'):
+        raise HTTPException(status_code=400, detail='source must be "upload" or "server".')
     if not text and not file:
         raise HTTPException(status_code=400, detail='Provide either "text" (pasted email) or "file" (.eml upload).')
     if text and file:
@@ -266,19 +313,59 @@ async def analyze_email_route(
         summary_parts.append(f"{len(bad_urls)}/{len(url_details)} URL(s) flagged")
     summary = ('Phishing indicators found: ' + '; '.join(summary_parts) + '.') if summary_parts \
         else 'No phishing indicators found in the email content or any extracted URLs.'
+    remediation = _remediation(overall_verdict, len(bad_urls))
+
+    metadata = {
+        'from_addr': email.from_addr,
+        'to_addr': email.to_addr,
+        'subject': email.subject,
+        'date': email.date,
+        'num_urls': len(urls),
+        'attachment_count': email.attachment_count,
+    }
+
+    # Best-effort persistence — db.insert_detection fails open (logs and
+    # returns None) if Postgres isn't reachable, never breaks this response.
+    db.insert_detection({
+        'source': source,
+        'submitted_by': submitted_by,
+        'verdict': overall_verdict,
+        'likelihood': overall_likelihood,
+        'summary': summary,
+        'remediation': remediation,
+        'from_addr': metadata['from_addr'],
+        'to_addr': metadata['to_addr'],
+        'subject': metadata['subject'],
+        'email_date': metadata['date'],
+        'num_urls': metadata['num_urls'],
+        'attachment_count': metadata['attachment_count'],
+        'email_score': email_detail['score'],
+        'email_model': email_detail['model'],
+        'email_reason': email_detail['reason'],
+        'email_features': email_detail['features'],
+        'urls': url_details,
+    })
 
     return {
         'verdict': overall_verdict,
         'likelihood': overall_likelihood,
         'summary': summary,
+        'remediation': remediation,
         'email': email_detail,
         'urls': url_details,
-        'metadata': {
-            'from_addr': email.from_addr,
-            'to_addr': email.to_addr,
-            'subject': email.subject,
-            'date': email.date,
-            'num_urls': len(urls),
-            'attachment_count': email.attachment_count,
-        },
+        'metadata': metadata,
     }
+
+
+@app.get('/detections', response_model=list[DetectionRecord], dependencies=[Depends(require_auth)])
+def list_detections_route(
+    source: Optional[str] = Query(None, description='Filter by "upload" or "server"'),
+    verdict: Optional[str] = Query(None, description='Filter by "clean", "flag", or "quarantine"'),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    if source is not None and source not in ('upload', 'server'):
+        raise HTTPException(status_code=400, detail='source must be "upload" or "server".')
+    if verdict is not None and verdict not in ('clean', 'flag', 'quarantine'):
+        raise HTTPException(status_code=400, detail='verdict must be "clean", "flag", or "quarantine".')
+    return db.list_detections(source=source, verdict=verdict, limit=limit, offset=offset)
