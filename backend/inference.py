@@ -163,16 +163,21 @@ class URLPredictor:
         return arr
 
     def predict(self, url: str) -> dict:
+        # Engineered features are always computed for transparency/display,
+        # even on the Char-CNN path (which scores raw characters and doesn't
+        # use them for the prediction itself).
+        feats = url_features(url)
         if self._using_cnn:
             proba = float(self._model.predict(self._encode(url), verbose=0)[0][0])
             label = int(proba >= 0.5)
-            return {'label': label, 'confidence': round(proba, 4), 'model': 'url_charcnn'}
+            return {'label': label, 'confidence': round(proba, 4),
+                    'model': 'url_charcnn', 'features': feats}
         else:
-            feats = url_features(url)
             row   = pd.DataFrame([feats])[URL_FEATS]
             proba = float(self._model.predict_proba(row)[0][1])
             label = int(proba >= 0.5)
-            return {'label': label, 'confidence': round(proba, 4), 'model': 'url_rf'}
+            return {'label': label, 'confidence': round(proba, 4),
+                    'model': 'url_rf', 'features': feats}
 
 
 # ---------------------------------------------------------------------------
