@@ -2,6 +2,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.9
 boto3>=1.35
+python-multipart>=0.0.9  # required by FastAPI for Form/File (/analyze/email upload)
 joblib>=1.4
 scikit-learn>=1.5
 pandas>=2.2
