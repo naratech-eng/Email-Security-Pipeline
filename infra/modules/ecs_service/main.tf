@@ -70,10 +70,14 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
   })
 }
 
-# SEC-T3 — read-only access to exactly the two app secrets, nothing else
-resource "aws_iam_role_policy" "ecs_task_secrets" {
+# SEC-T3 — read-only access to exactly the two app secrets, nothing else.
+# Attached to the execution role, not the task role: ECS resolves the
+# container definition's `secrets` block (env var injection at container
+# startup) using the execution role, not the task role. The task role is for
+# permissions the app itself needs at runtime (e.g. S3 model reads below).
+resource "aws_iam_role_policy" "ecs_execution_secrets" {
   name = "app-secrets-read"
-  role = aws_iam_role.ecs_task.id
+  role = aws_iam_role.ecs_execution.id
 
   policy = jsonencode({
     Version = "2012-10-17"
