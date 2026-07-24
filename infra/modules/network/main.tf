@@ -162,6 +162,64 @@ resource "aws_route_table_association" "private" {
 }
 
 # --------------------------------------------------------------------------- #
+# VPC Endpoints — private-subnet access to AWS services without a NAT gateway.
+# Fargate tasks in the private subnets need Secrets Manager (env var secrets),
+# ECR (image pull), and CloudWatch Logs (awslogs driver); S3 gateway endpoint
+# covers model artifact downloads. Single-AZ interface endpoints (first
+# private subnet only) mirrors the existing single-AZ NAT gateway's dev-cost
+# tradeoff above — not HA, fine for a lab environment.
+# --------------------------------------------------------------------------- #
+resource "aws_security_group" "vpc_endpoints" {
+  #checkov:skip=CKV_AWS_382: No egress needed — endpoint ENIs only receive from in-VPC clients, they don't initiate outbound traffic
+  name        = "${var.project}-sg-vpc-endpoints"
+  description = "Interface VPC endpoints: allow HTTPS from within the VPC"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "HTTPS from VPC (ECS tasks, etc.)"
+  }
+
+  tags = { Name = "${var.project}-sg-vpc-endpoints", Project = var.project }
+}
+
+locals {
+  interface_endpoint_services = var.enable_vpc_endpoints ? toset([
+    "secretsmanager",
+    "ecr.api",
+    "ecr.dkr",
+    "logs",
+  ]) : toset([])
+}
+
+resource "aws_vpc_endpoint" "interface" {
+  for_each            = local.interface_endpoint_services
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.${each.value}"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private[0].id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = { Name = "${var.project}-vpce-${each.value}", Project = var.project }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  count             = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = { Name = "${var.project}-vpce-s3", Project = var.project }
+}
+
+data "aws_region" "current" {}
+
+# --------------------------------------------------------------------------- #
 # Security Groups
 # --------------------------------------------------------------------------- #
 
