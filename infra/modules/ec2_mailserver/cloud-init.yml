@@ -37,9 +37,136 @@ write_files:
         inbox = yes
       }
 
+  # M7-T5 — global Sieve rule: anything the content_filter tagged
+  # X-Phishing-Verdict: quarantine gets filed into a Quarantine mailbox
+  # instead of INBOX. Self-contained file (sieve_before + the lmtp plugin
+  # hook together) so it doesn't touch any package-default conf.d filename.
+  - path: /etc/dovecot/conf.d/91-esp-sieve.conf
+    content: |
+      plugin {
+        sieve = ~/.dovecot.sieve
+        sieve_before = /etc/dovecot/sieve/quarantine.sieve
+      }
+      protocol lmtp {
+        mail_plugins = $mail_plugins sieve
+      }
+
+  - path: /etc/dovecot/sieve/quarantine.sieve
+    content: |
+      require ["fileinto", "mailbox"];
+      if header :contains "X-Phishing-Verdict" "quarantine" {
+        fileinto :create "Quarantine";
+        stop;
+      }
+
+  # M7-T4 — Postfix content_filter. Reads the message on stdin, scores it
+  # via the inference API, tags X-Phishing-Verdict/X-Phishing-Score headers,
+  # and re-injects into Postfix. Fails open on any error — mail is never
+  # blocked or lost because of the scoring step.
+  - path: /usr/local/bin/phishing_filter.py
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env python3
+      import json
+      import subprocess
+      import sys
+      import urllib.error
+      import urllib.request
+
+      API_URL = "http://${api_internal_url}/analyze/email"
+      TOKEN_FILE = "/etc/esp/api-token"
+      # 15s: near-real-time in the common case (warm API, tens of ms), but
+      # gives headroom for the one slow window right after a CI-T1 redeploy
+      # when the API is cold-loading models on its first request.
+      TIMEOUT = 15
+      SENDMAIL = "/usr/sbin/sendmail"
+
+
+      def read_token():
+          try:
+              with open(TOKEN_FILE) as f:
+                  return f.read().strip()
+          except Exception:
+              return None
+
+
+      def score(raw_message: bytes):
+          token = read_token()
+          boundary = "----espfilterboundary"
+          # M7-T15 — tags every mail-path detection with source=server, so it
+          # lands correctly in the detections store next to (not mixed up
+          # with) dashboard upload/paste detections.
+          body = (
+              ("--" + boundary + "\r\n"
+               'Content-Disposition: form-data; name="source"\r\n\r\n'
+               "server\r\n"
+               "--" + boundary + "\r\n"
+               'Content-Disposition: form-data; name="file"; filename="msg.eml"\r\n'
+               "Content-Type: message/rfc822\r\n\r\n").encode()
+              + raw_message
+              + ("\r\n--" + boundary + "--\r\n").encode()
+          )
+          headers = {"Content-Type": "multipart/form-data; boundary=" + boundary}
+          if token:
+              headers["Authorization"] = "Bearer " + token
+
+          req = urllib.request.Request(API_URL, data=body, headers=headers, method="POST")
+          try:
+              with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+                  return json.loads(resp.read())
+          except Exception as e:
+              sys.stderr.write("phishing_filter: API call failed, failing open: " + str(e) + "\n")
+              return None
+
+
+      def tag_headers(raw_message: bytes, verdict_json) -> bytes:
+          if verdict_json is None:
+              return raw_message  # fail open — deliver unmodified
+          verdict = verdict_json.get("verdict", "clean")
+          likelihood = verdict_json.get("likelihood", 0)
+          header = ("X-Phishing-Verdict: " + str(verdict) + "\r\n"
+                     "X-Phishing-Score: " + str(likelihood) + "\r\n").encode()
+          return header + raw_message
+
+
+      def deliver(message: bytes, sender: str, recipients: list) -> int:
+          # -G: gateway submission, skips content_filter again (no re-scoring
+          # loop). -i: don't treat a lone "." line as end-of-message.
+          proc = subprocess.run(
+              [SENDMAIL, "-G", "-i", "-f", sender, "--"] + recipients,
+              input=message,
+          )
+          return proc.returncode
+
+
+      def main():
+          args = sys.argv[1:]
+          if "-f" not in args or "--" not in args:
+              sys.stderr.write("usage: phishing_filter.py -f <sender> -- <recipient...>\n")
+              sys.exit(1)
+          sender = args[args.index("-f") + 1]
+          recipients = args[args.index("--") + 1:]
+          raw = sys.stdin.buffer.read()
+
+          try:
+              verdict_json = score(raw)
+              out = tag_headers(raw, verdict_json)
+          except Exception as e:
+              # Any unexpected failure in scoring/tagging still delivers the
+              # original message untouched — never lose or block mail.
+              sys.stderr.write("phishing_filter: unexpected error, failing open: " + str(e) + "\n")
+              out = raw
+
+          sys.exit(deliver(out, sender, recipients))
+
+
+      if __name__ == "__main__":
+          main()
+
 runcmd:
   # Install packages after EPEL is available (s-nail replaces mailx in Rocky Linux 9)
-  - dnf install -y postfix dovecot swaks s-nail
+  # dovecot-pigeonhole = Sieve support (M7-T5); unzip = needed by the AWS CLI installer
+  - dnf install -y postfix dovecot dovecot-pigeonhole swaks s-nail unzip
 
   # Apply Postfix config — use Terraform-rendered values directly (no shell var expansion)
   - postconf -e "myhostname = ${mail_hostname}"
@@ -51,20 +178,71 @@ runcmd:
   - postconf -e "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"
   - newaliases
 
-  # Create two test mail accounts
+  # Create test mail accounts
   - useradd -m testuser1 || true
   - useradd -m testuser2 || true
   - echo "testuser1:ChangeMe123!" | chpasswd
   - echo "testuser2:ChangeMe123!" | chpasswd
 
+  # M7-T6 — named accounts for external client testing (klara@, john@,
+  # michael@mail.naratech.xyz). Distinct temp passwords, not the shared
+  # testuser one — change these after first login.
+  - useradd -m klara || true
+  - useradd -m john || true
+  - useradd -m michael || true
+  - echo "klara:Klara2026!" | chpasswd
+  - echo "john:John2026!" | chpasswd
+  - echo "michael:Michael2026!" | chpasswd
+
+  # M7-T4 — AWS CLI (official installer; not reliably packaged for RHEL9-family
+  # via EPEL) needed once, to fetch the JWT key at boot.
+  - curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  - unzip -q /tmp/awscliv2.zip -d /tmp
+  - /tmp/aws/install
+  - rm -rf /tmp/awscliv2.zip /tmp/aws
+
+  # Dedicated unprivileged user to run the content_filter + re-inject mail
+  - useradd -r -s /sbin/nologin filter || true
+
+  # Fetch the JWT signing key once at boot — content_filter reads it from
+  # disk on every invocation rather than calling Secrets Manager per email.
+  - mkdir -p /etc/esp
+  - >-
+    aws secretsmanager get-secret-value
+    --secret-id ${jwt_signing_key_secret_arn}
+    --region us-east-1
+    --query SecretString --output text > /etc/esp/api-token
+  - chmod 600 /etc/esp/api-token
+  - chown filter:filter /etc/esp/api-token
+
+  # M7-T4 — wire Postfix's content_filter to the scoring script.
+  # $${sender}/$${recipient} are Postfix's own master.cf placeholders,
+  # substituted per-message at delivery time — escaped here so Terraform's
+  # templatefile() doesn't try to interpolate them itself.
+  - postconf -e "content_filter = phishing-filter:dummy"
+  - |
+    cat >> /etc/postfix/master.cf << 'MASTERCF'
+
+    phishing-filter unix - n n - 10 pipe
+      flags=Rq user=filter null_sender=
+      argv=/usr/local/bin/phishing_filter.py -f $${sender} -- $${recipient}
+    MASTERCF
+
+  # M7-T5 — compile the Sieve script now so a syntax error surfaces during
+  # provisioning, not silently on the first real email.
+  - sievec /etc/dovecot/sieve/quarantine.sieve
+
   # Enable and start services
   - systemctl enable --now postfix dovecot
+  - systemctl restart postfix dovecot
 
-  # Smoke test — send a local test email
+  # Smoke test — send a local test email (through the content_filter)
   - swaks --to testuser2@localhost --from testuser1@localhost --server 127.0.0.1 --helo ${mail_hostname} || true
 
 final_message: |
   Rocky Linux 9 mail server bootstrap complete.
-  Postfix and Dovecot are running.
-  Test accounts: testuser1, testuser2 (password: ChangeMe123!)
+  Postfix and Dovecot are running, content_filter active (M7-T4/T5).
+  Local test accounts: testuser1, testuser2 (password: ChangeMe123!)
+  Named accounts: klara@mail.naratech.xyz, john@mail.naratech.xyz, michael@mail.naratech.xyz
+    (passwords: Klara2026! / John2026! / Michael2026! — change on first login)
   Run: swaks --to testuser2@localhost --from testuser1@localhost
