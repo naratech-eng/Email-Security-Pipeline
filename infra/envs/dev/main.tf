@@ -88,7 +88,7 @@ module "secrets" {
   environment = var.environment
   db_username = module.rds.username
   db_password = var.db_password
-  db_host     = module.rds.endpoint
+  db_host     = module.rds.address
   db_name     = module.rds.db_name
 }
 

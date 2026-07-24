@@ -33,9 +33,13 @@ def _db_url_from_env() -> str:
             "ECS/the app would have it injected) before running migrations."
         )
     creds = json.loads(raw)
+    # Defensive: some AWS-provided host values (e.g. aws_db_instance's
+    # .endpoint attribute) come as "host:port" already combined. Strip any
+    # embedded port so it doesn't collide with the separate "port" field.
+    host = str(creds['host']).split(':')[0]
     return (
         f"postgresql+psycopg://{creds['username']}:{creds['password']}"
-        f"@{creds['host']}:{creds['port']}/{creds['dbname']}"
+        f"@{host}:{creds['port']}/{creds['dbname']}"
     )
 
 

@@ -30,8 +30,13 @@ def _resolve_db_url() -> Optional[str]:
         return None
     try:
         creds = json.loads(raw)
+        # Defensive: some AWS-provided host values (e.g. aws_db_instance's
+        # .endpoint attribute) come as "host:port" already combined. Strip
+        # any embedded port so it doesn't collide with the separate "port"
+        # field below.
+        host = str(creds['host']).split(':')[0]
         _db_url = (
-            f"host={creds['host']} port={creds['port']} "
+            f"host={host} port={creds['port']} "
             f"dbname={creds['dbname']} user={creds['username']} "
             f"password={creds['password']}"
         )
