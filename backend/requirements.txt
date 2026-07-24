@@ -13,3 +13,7 @@ numpy>=1.26
 # (unbounded tree depth in M6-T4 training) that doesn't fit the Fargate
 # task's 1024MB memory limit, so keep tensorflow installed for now.
 tensorflow>=2.16
+
+# Test-only: starlette's TestClient (used by tests/test_integration_predict.py)
+# requires httpx2, not httpx, as of the fastapi/starlette versions above.
+httpx2>=2.0
