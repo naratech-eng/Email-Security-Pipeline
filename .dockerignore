@@ -2,5 +2,9 @@
 !backend/main.py
 !backend/inference.py
 !backend/mime_parser.py
+!backend/db.py
+!backend/alembic.ini
+!backend/migrations
+!backend/migrations/**
 !backend/requirements.txt
 !notebooks/M4/m4_t3_url_features.py
