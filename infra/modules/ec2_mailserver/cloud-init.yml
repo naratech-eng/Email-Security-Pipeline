@@ -172,11 +172,21 @@ runcmd:
   - postconf -e "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"
   - newaliases
 
-  # Create two test mail accounts
+  # Create test mail accounts
   - useradd -m testuser1 || true
   - useradd -m testuser2 || true
   - echo "testuser1:ChangeMe123!" | chpasswd
   - echo "testuser2:ChangeMe123!" | chpasswd
+
+  # M7-T6 — named accounts for external client testing (klara@, john@,
+  # michael@mail.naratech.xyz). Distinct temp passwords, not the shared
+  # testuser one — change these after first login.
+  - useradd -m klara || true
+  - useradd -m john || true
+  - useradd -m michael || true
+  - echo "klara:Klara2026!" | chpasswd
+  - echo "john:John2026!" | chpasswd
+  - echo "michael:Michael2026!" | chpasswd
 
   # M7-T4 — AWS CLI (official installer; not reliably packaged for RHEL9-family
   # via EPEL) needed once, to fetch the JWT key at boot.
@@ -226,5 +236,7 @@ runcmd:
 final_message: |
   Rocky Linux 9 mail server bootstrap complete.
   Postfix and Dovecot are running, content_filter active (M7-T4/T5).
-  Test accounts: testuser1, testuser2 (password: ChangeMe123!)
+  Local test accounts: testuser1, testuser2 (password: ChangeMe123!)
+  Named accounts: klara@mail.naratech.xyz, john@mail.naratech.xyz, michael@mail.naratech.xyz
+    (passwords: Klara2026! / John2026! / Michael2026! — change on first login)
   Run: swaks --to testuser2@localhost --from testuser1@localhost
