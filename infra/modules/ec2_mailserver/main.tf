@@ -98,14 +98,12 @@ resource "aws_instance" "mail" {
     jwt_signing_key_secret_arn = var.jwt_signing_key_secret_arn
     api_internal_url           = var.api_internal_url
   }))
-  # Cloud-init only runs on first boot, so editing cloud-init.yml normally
-  # needs this set to true to force a replace and actually apply the change.
-  # Temporarily false (M7-T4/T5): the current instance is running fine and
-  # the content_filter/Sieve changes are being configured on it by hand
-  # instead. `terraform apply` will update the stored user_data harmlessly
-  # (no live effect until next boot) without touching the running instance.
-  # Flip back to true once ready to let a real replacement pick this up.
-  user_data_replace_on_change = false
+  # Cloud-init only runs on first boot — without this, editing cloud-init.yml
+  # later would silently update the stored user_data but never actually run
+  # on the live instance. Force a clean replace when the rendered content
+  # actually changes (i.e. only on real cloud-init edits, not on unrelated
+  # applies elsewhere in the stack).
+  user_data_replace_on_change = true
 
   tags = {
     Name    = "${var.project}-mail-server"
@@ -123,4 +121,16 @@ resource "aws_route53_record" "mail_a" {
   type    = "A"
   ttl     = 300
   records = [aws_instance.mail.public_ip]
+}
+
+# M7-T6 — self-referencing MX so external mail (Gmail, etc.) can actually
+# route to this server for addresses like testuser1@mail.naratech.xyz.
+# Deliberately scoped to the mail. subdomain, not the naratech.xyz apex —
+# that domain's MX already points at real email forwarding and isn't touched.
+resource "aws_route53_record" "mail_mx" {
+  zone_id = var.mail_zone_id
+  name    = var.mail_hostname
+  type    = "MX"
+  ttl     = 300
+  records = ["10 ${var.mail_hostname}"]
 }
