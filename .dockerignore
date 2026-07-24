@@ -1,5 +1,6 @@
 *
 !backend/main.py
 !backend/inference.py
+!backend/mime_parser.py
 !backend/requirements.txt
 !notebooks/M4/m4_t3_url_features.py

@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/main.py backend/main.py
 COPY backend/inference.py backend/inference.py
+COPY backend/mime_parser.py backend/mime_parser.py
 COPY notebooks/M4/m4_t3_url_features.py notebooks/M4/m4_t3_url_features.py
 
 RUN useradd --create-home --shell /bin/false appuser \
