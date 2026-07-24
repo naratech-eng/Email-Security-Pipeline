@@ -174,14 +174,16 @@ module "ecs" {
 # EC2 Mail Server (Rocky Linux 9) + Route53 A record for mail.naratech.xyz
 # --------------------------------------------------------------------------- #
 module "mail_server" {
-  source           = "../../modules/ec2_mailserver"
-  project          = var.project
-  public_subnet_id = module.network.public_subnet_ids[0]
-  sg_mail_id       = module.network.sg_mail_id
-  key_name         = var.key_name
-  mail_domain      = var.mail_domain
-  mail_hostname    = var.mail_hostname
-  mail_zone_id     = var.mail_zone_id
+  source                     = "../../modules/ec2_mailserver"
+  project                    = var.project
+  public_subnet_id           = module.network.public_subnet_ids[0]
+  sg_mail_id                 = module.network.sg_mail_id
+  key_name                   = var.key_name
+  mail_domain                = var.mail_domain
+  mail_hostname              = var.mail_hostname
+  mail_zone_id               = var.mail_zone_id
+  jwt_signing_key_secret_arn = module.secrets.jwt_signing_key_arn
+  api_internal_url           = module.alb.internal_alb_dns
 }
 
 # --------------------------------------------------------------------------- #
