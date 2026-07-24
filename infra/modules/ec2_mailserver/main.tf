@@ -98,10 +98,14 @@ resource "aws_instance" "mail" {
     jwt_signing_key_secret_arn = var.jwt_signing_key_secret_arn
     api_internal_url           = var.api_internal_url
   }))
-  # Cloud-init only runs on first boot — without this, editing cloud-init.yml
-  # later would silently update the stored user_data but never actually run
-  # on the live instance. Force a clean replace instead.
-  user_data_replace_on_change = true
+  # Cloud-init only runs on first boot, so editing cloud-init.yml normally
+  # needs this set to true to force a replace and actually apply the change.
+  # Temporarily false (M7-T4/T5): the current instance is running fine and
+  # the content_filter/Sieve changes are being configured on it by hand
+  # instead. `terraform apply` will update the stored user_data harmlessly
+  # (no live effect until next boot) without touching the running instance.
+  # Flip back to true once ready to let a real replacement pick this up.
+  user_data_replace_on_change = false
 
   tags = {
     Name    = "${var.project}-mail-server"
