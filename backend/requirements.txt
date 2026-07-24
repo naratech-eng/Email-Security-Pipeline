@@ -1,0 +1,15 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.9
+boto3>=1.35
+joblib>=1.4
+scikit-learn>=1.5
+pandas>=2.2
+numpy>=1.26
+
+# url_charcnn (M6-T3) is the primary URL model (F1 0.9755, ~1MB on disk).
+# URLPredictor falls back to the Random Forest (url_rf, F1 0.866) only if
+# tensorflow is unavailable — that fallback is currently a 1.7GB artifact
+# (unbounded tree depth in M6-T4 training) that doesn't fit the Fargate
+# task's 1024MB memory limit, so keep tensorflow installed for now.
+tensorflow>=2.16
