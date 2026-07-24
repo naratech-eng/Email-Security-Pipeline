@@ -67,7 +67,7 @@ jobs:
       # ECS Fargate — no host EC2 to run scanning agents on, so the image
       # itself is the only place to catch known CVEs before it ships.
       - name: Trivy scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.tag }}
           format: table
