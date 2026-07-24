@@ -93,8 +93,14 @@ write_files:
       def score(raw_message: bytes):
           token = read_token()
           boundary = "----espfilterboundary"
+          # M7-T15 — tags every mail-path detection with source=server, so it
+          # lands correctly in the detections store next to (not mixed up
+          # with) dashboard upload/paste detections.
           body = (
               ("--" + boundary + "\r\n"
+               'Content-Disposition: form-data; name="source"\r\n\r\n'
+               "server\r\n"
+               "--" + boundary + "\r\n"
                'Content-Disposition: form-data; name="file"; filename="msg.eml"\r\n'
                "Content-Type: message/rfc822\r\n\r\n").encode()
               + raw_message
