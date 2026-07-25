@@ -23,11 +23,9 @@ write_files:
       mynetworks = 127.0.0.0/8
       relayhost =
       smtpd_banner = $myhostname ESMTP
-      # Reject open relay
       smtpd_recipient_restrictions =
         permit_mynetworks,
         reject_unauth_destination
-      # Dovecot LMTP delivery
       mailbox_transport = lmtp:unix:private/dovecot-lmtp
 
   - path: /etc/dovecot/conf.d/10-mail.conf
@@ -37,10 +35,7 @@ write_files:
         inbox = yes
       }
 
-  # M7-T5 — global Sieve rule: anything the content_filter tagged
-  # X-Phishing-Verdict: quarantine gets filed into a Quarantine mailbox
-  # instead of INBOX. Self-contained file (sieve_before + the lmtp plugin
-  # hook together) so it doesn't touch any package-default conf.d filename.
+  # M7-T5: quarantine-verdict mail -> Quarantine mailbox, not INBOX.
   - path: /etc/dovecot/conf.d/91-esp-sieve.conf
     content: |
       plugin {
@@ -59,9 +54,7 @@ write_files:
         stop;
       }
 
-  # M7-T6 — exposes Dovecot's SASL auth over a Unix socket Postfix's
-  # submission service (port 587) can use, so email clients authenticate
-  # with the same username/password they use for IMAP.
+  # M7-T6: Dovecot SASL socket for Postfix's submission service (587).
   - path: /etc/dovecot/conf.d/92-esp-postfix-auth.conf
     content: |
       service auth {
@@ -72,10 +65,8 @@ write_files:
         }
       }
 
-  # M7-T4 — Postfix content_filter. Reads the message on stdin, scores it
-  # via the inference API, tags X-Phishing-Verdict/X-Phishing-Score headers,
-  # and re-injects into Postfix. Fails open on any error — mail is never
-  # blocked or lost because of the scoring step.
+  # M7-T4 content_filter: scores each message via the API, tags
+  # X-Phishing-Verdict/X-Phishing-Score, re-injects. Fails open on error.
   - path: /usr/local/bin/phishing_filter.py
     permissions: '0755'
     content: |
@@ -88,10 +79,7 @@ write_files:
 
       API_URL = "http://${api_internal_url}/analyze/email"
       TOKEN_FILE = "/etc/esp/api-token"
-      # 15s: near-real-time in the common case (warm API, tens of ms), but
-      # gives headroom for the one slow window right after a CI-T1 redeploy
-      # when the API is cold-loading models on its first request.
-      TIMEOUT = 15
+      TIMEOUT = 15  # cold API load after a redeploy can be slow; fail open past this
       SENDMAIL = "/usr/sbin/sendmail"
 
 
@@ -106,9 +94,7 @@ write_files:
       def score(raw_message: bytes):
           token = read_token()
           boundary = "----espfilterboundary"
-          # M7-T15 — tags every mail-path detection with source=server, so it
-          # lands correctly in the detections store next to (not mixed up
-          # with) dashboard upload/paste detections.
+          # source=server tags mail-path detections (vs dashboard upload/paste)
           body = (
               ("--" + boundary + "\r\n"
                'Content-Disposition: form-data; name="source"\r\n\r\n'
@@ -143,8 +129,8 @@ write_files:
 
 
       def deliver(message: bytes, sender: str, recipients: list) -> int:
-          # -G: gateway submission, skips content_filter again (no re-scoring
-          # loop). -i: don't treat a lone "." line as end-of-message.
+          # -G skips content_filter again (no re-scoring loop); -i keeps a
+          # lone "." line from being treated as end-of-message.
           proc = subprocess.run(
               [SENDMAIL, "-G", "-i", "-f", sender, "--"] + recipients,
               input=message,
@@ -165,10 +151,8 @@ write_files:
               verdict_json = score(raw)
               out = tag_headers(raw, verdict_json)
           except Exception as e:
-              # Any unexpected failure in scoring/tagging still delivers the
-              # original message untouched — never lose or block mail.
               sys.stderr.write("phishing_filter: unexpected error, failing open: " + str(e) + "\n")
-              out = raw
+              out = raw  # never lose or block mail
 
           sys.exit(deliver(out, sender, recipients))
 
@@ -177,19 +161,15 @@ write_files:
           main()
 
 runcmd:
-  # Debugging/ops access — the official Rocky Linux AMI doesn't ship the SSM
-  # Agent or EC2 Instance Connect by default (unlike Amazon Linux), so
-  # neither silently works without this. Installed first, before anything
-  # else, so access is available even if a later step in this script fails.
+  # Rocky's official AMI ships neither SSM Agent nor EC2 Instance Connect
+  # (unlike Amazon Linux) — install first so access survives later failures.
   - dnf install -y https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm || true
   - systemctl enable --now amazon-ssm-agent || true
   - dnf install -y ec2-instance-connect || true
 
-  # Install packages after EPEL is available (s-nail replaces mailx in Rocky Linux 9)
-  # dovecot-pigeonhole = Sieve support (M7-T5); unzip = needed by the AWS CLI installer
+  # dovecot-pigeonhole = Sieve (M7-T5); unzip = for the AWS CLI installer
   - dnf install -y postfix dovecot dovecot-pigeonhole swaks s-nail unzip
 
-  # Apply Postfix config — use Terraform-rendered values directly (no shell var expansion)
   - postconf -e "myhostname = ${mail_hostname}"
   - postconf -e "mydomain = ${mail_domain}"
   - postconf -e "myorigin = ${mail_domain}"
@@ -199,20 +179,15 @@ runcmd:
   - postconf -e "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"
   - newaliases
 
-  # M7-T6 — self-signed TLS cert for Postfix, needed for the authenticated
-  # submission service below (mandatory STARTTLS). Dovecot ships its own
-  # default cert for IMAP STARTTLS already; Postfix doesn't, so generate one.
+  # Self-signed TLS cert for Postfix (submission below requires STARTTLS).
   - mkdir -p /etc/pki/postfix
   - openssl req -x509 -nodes -newkey rsa:2048 -days 825 -keyout /etc/pki/postfix/postfix.key -out /etc/pki/postfix/postfix.crt -subj "/CN=${mail_hostname}"
   - postconf -e "smtpd_tls_cert_file = /etc/pki/postfix/postfix.crt"
   - postconf -e "smtpd_tls_key_file = /etc/pki/postfix/postfix.key"
   - postconf -e "smtpd_tls_security_level = may"
 
-  # M7-T6 — authenticated SMTP submission (port 587) so email clients
-  # (Thunderbird, Outlook) can send mail through this server, not just
-  # receive it. Kept entirely separate from port 25: main.cf's global
-  # settings are untouched (25 stays receive-only, no relay), everything
-  # SASL/relay-related is scoped to this service alone via -o overrides.
+  # M7-T6: authenticated SMTP submission (587) — clients send through us,
+  # port 25 stays receive-only. All SASL/relay logic scoped via -o here.
   - |
     cat >> /etc/postfix/master.cf << 'MASTERCF'
 
@@ -228,15 +203,12 @@ runcmd:
       -o milter_macro_daemon_name=ORIGINATING
     MASTERCF
 
-  # Create test mail accounts
   - useradd -m testuser1 || true
   - useradd -m testuser2 || true
   - echo "testuser1:ChangeMe123!" | chpasswd
   - echo "testuser2:ChangeMe123!" | chpasswd
 
-  # M7-T6 — named accounts for external client testing (klara@, john@,
-  # michael@mail.naratech.xyz). Distinct temp passwords, not the shared
-  # testuser one — change these after first login.
+  # M7-T6 named accounts for external client testing.
   - useradd -m klara || true
   - useradd -m john || true
   - useradd -m michael || true
@@ -244,18 +216,15 @@ runcmd:
   - echo "john:John2026!" | chpasswd
   - echo "michael:Michael2026!" | chpasswd
 
-  # M7-T4 — AWS CLI (official installer; not reliably packaged for RHEL9-family
-  # via EPEL) needed once, to fetch the JWT key at boot.
+  # Official AWS CLI installer — not reliably packaged for RHEL9 via EPEL.
   - curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
   - unzip -q /tmp/awscliv2.zip -d /tmp
   - /tmp/aws/install
   - rm -rf /tmp/awscliv2.zip /tmp/aws
 
-  # Dedicated unprivileged user to run the content_filter + re-inject mail
   - useradd -r -s /sbin/nologin filter || true
 
-  # Fetch the JWT signing key once at boot — content_filter reads it from
-  # disk on every invocation rather than calling Secrets Manager per email.
+  # Fetch the JWT key once at boot; content_filter reads it from disk.
   - mkdir -p /etc/esp
   - >-
     aws secretsmanager get-secret-value
@@ -265,10 +234,8 @@ runcmd:
   - chmod 600 /etc/esp/api-token
   - chown filter:filter /etc/esp/api-token
 
-  # M7-T4 — wire Postfix's content_filter to the scoring script.
-  # $${sender}/$${recipient} are Postfix's own master.cf placeholders,
-  # substituted per-message at delivery time — escaped here so Terraform's
-  # templatefile() doesn't try to interpolate them itself.
+  # $${sender}/$${recipient} are Postfix's own placeholders — escaped so
+  # Terraform's templatefile() doesn't interpolate them itself.
   - postconf -e "content_filter = phishing-filter:dummy"
   - |
     cat >> /etc/postfix/master.cf << 'MASTERCF'
@@ -278,15 +245,11 @@ runcmd:
       argv=/usr/local/bin/phishing_filter.py -f $${sender} -- $${recipient}
     MASTERCF
 
-  # M7-T5 — compile the Sieve script now so a syntax error surfaces during
-  # provisioning, not silently on the first real email.
   - sievec /etc/dovecot/sieve/quarantine.sieve
 
-  # Enable and start services
   - systemctl enable --now postfix dovecot
   - systemctl restart postfix dovecot
 
-  # Smoke test — send a local test email (through the content_filter)
   - swaks --to testuser2@localhost --from testuser1@localhost --server 127.0.0.1 --helo ${mail_hostname} || true
 
 final_message: |
@@ -295,7 +258,5 @@ final_message: |
   Local test accounts: testuser1, testuser2 (password: ChangeMe123!)
   Named accounts: klara@mail.naratech.xyz, john@mail.naratech.xyz, michael@mail.naratech.xyz
     (passwords: Klara2026! / John2026! / Michael2026! — change on first login)
-  IMAP: port 143 (STARTTLS). SMTP submission: port 587 (STARTTLS, SASL login
-  with the same username/password as IMAP) — for clients to send mail out,
-  not just receive it.
+  IMAP: port 143 (STARTTLS). SMTP submission: port 587 (STARTTLS, SASL).
   Run: swaks --to testuser2@localhost --from testuser1@localhost
