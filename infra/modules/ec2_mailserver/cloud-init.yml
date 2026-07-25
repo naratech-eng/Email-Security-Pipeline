@@ -266,11 +266,12 @@ runcmd:
   - postconf -e "smtp_sasl_security_options = noanonymous"
   - postconf -e "smtp_tls_security_level = encrypt"
 
-  # Scoped to the port-25 smtp service, never global: the filter's own sendmail
-  # re-injection arrives via `pickup`, so a global setting refilters it forever
-  # (pipe -> reinject -> pickup -> pipe -> ...) and mail never reaches Dovecot.
+  # Scoped to smtp+submission, never global (global refilters the filter's own
+  # pickup re-injection forever). Submission included so internal->internal
+  # and outbound mail get scanned too, not just inbound from the MX.
   # $${sender}/$${recipient} are Postfix placeholders, escaped from templatefile().
   - postconf -P 'smtp/inet/content_filter=phishing-filter:dummy'
+  - postconf -P 'submission/inet/content_filter=phishing-filter:dummy'
   - |
     cat >> /etc/postfix/master.cf << 'MASTERCF'
 
