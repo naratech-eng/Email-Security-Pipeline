@@ -11,23 +11,6 @@ packages:
 # postfix, dovecot, swaks, s-nail installed in runcmd after EPEL is available
 
 write_files:
-  - path: /etc/postfix/main.cf.d/esp.cf
-    content: |
-      # Email Security Pipeline — Postfix config
-      myhostname = ${mail_hostname}
-      mydomain   = ${mail_domain}
-      myorigin   = $mydomain
-      inet_interfaces = all
-      inet_protocols = ipv4
-      mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain
-      mynetworks = 127.0.0.0/8
-      relayhost =
-      smtpd_banner = $myhostname ESMTP
-      smtpd_recipient_restrictions =
-        permit_mynetworks,
-        reject_unauth_destination
-      mailbox_transport = lmtp:unix:private/dovecot-lmtp
-
   - path: /etc/dovecot/conf.d/10-mail.conf
     content: |
       mail_location = maildir:~/Maildir
@@ -65,6 +48,24 @@ write_files:
         }
       }
 
+  # Postfix must hand final delivery to Dovecot over LMTP, not to its own
+  # `local` transport — `local` writes mbox to /var/spool/mail/$user, which
+  # Dovecot (mail_location = maildir:~/Maildir) cannot see, so IMAP shows an
+  # empty inbox. LMTP also is where Sieve runs, so quarantine routing needs it.
+  # auth_username_format strips the domain: PAM/system users are "klara", but
+  # LMTP hands over the full "klara@mail.naratech.xyz".
+  - path: /etc/dovecot/conf.d/93-esp-lmtp.conf
+    content: |
+      protocols = imap lmtp sieve
+      auth_username_format = %Ln
+      service lmtp {
+        unix_listener /var/spool/postfix/private/dovecot-lmtp {
+          mode = 0600
+          user = postfix
+          group = postfix
+        }
+      }
+
   # M7-T4 content_filter: scores each message via the API, tags
   # X-Phishing-Verdict/X-Phishing-Score, re-injects. Fails open on error.
   - path: /usr/local/bin/phishing_filter.py
@@ -79,7 +80,7 @@ write_files:
 
       API_URL = "http://${api_internal_url}/analyze/email"
       TOKEN_FILE = "/etc/esp/api-token"
-      TIMEOUT = 15  # cold API load after a redeploy can be slow; fail open past this
+      TIMEOUT = 45  # first call after an ECS task start loads models from S3 (~20-40s); warm calls are ~0.3s
       SENDMAIL = "/usr/sbin/sendmail"
 
 
@@ -177,6 +178,9 @@ runcmd:
   - postconf -e "mydestination = ${mail_hostname}, localhost.${mail_domain}, localhost, ${mail_domain}"
   - postconf -e "mynetworks = 127.0.0.0/8"
   - postconf -e "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"
+  # Rocky 9's main.cf has no `include` for main.cf.d, so every setting must go
+  # through postconf here — a drop-in file there is silently ignored.
+  - postconf -e "mailbox_transport = lmtp:unix:private/dovecot-lmtp"
   - newaliases
 
   # Self-signed TLS cert for Postfix (submission below requires STARTTLS).
@@ -234,9 +238,13 @@ runcmd:
   - chmod 600 /etc/esp/api-token
   - chown filter:filter /etc/esp/api-token
 
-  # $${sender}/$${recipient} are Postfix's own placeholders — escaped so
-  # Terraform's templatefile() doesn't interpolate them itself.
-  - postconf -e "content_filter = phishing-filter:dummy"
+  # Scoped to the port-25 smtp service only (not set globally in main.cf) —
+  # otherwise the filter's own sendmail re-injection (which comes in via
+  # `pickup`, not `smtp`) gets filtered again, forever: pipe -> reinject ->
+  # pickup -> pipe -> reinject -> ... an infinite loop that never reaches
+  # Dovecot. $${sender}/$${recipient} are Postfix's own placeholders,
+  # escaped so Terraform's templatefile() doesn't interpolate them itself.
+  - postconf -P 'smtp/inet/content_filter=phishing-filter:dummy'
   - |
     cat >> /etc/postfix/master.cf << 'MASTERCF'
 
