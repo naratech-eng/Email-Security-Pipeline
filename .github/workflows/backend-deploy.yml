@@ -47,13 +47,17 @@ jobs:
         id: vars
         run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
+      # v4/v7 below move these off the deprecated node20 runtime onto node24.
+      # Their only breaking changes were removing deprecated inputs/envs
+      # (DOCKER_BUILD_NO_SUMMARY, DOCKER_BUILD_EXPORT_RETENTION_DAYS, legacy
+      # export-build) — none of which this workflow used.
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Build once, locally (not pushed yet) — Fargate runs linux/amd64,
       # ubuntu-latest runners are natively amd64 so this needs no emulation.
       - name: Build image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
