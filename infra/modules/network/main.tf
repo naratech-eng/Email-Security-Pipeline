@@ -377,6 +377,7 @@ resource "aws_security_group" "mail" {
     description = "SMTP inbound"
   }
 
+
   # M7-T6 — IMAP/IMAPS so an email client (not just swaks) can connect and
   # read mail delivered by Dovecot.
   ingress {

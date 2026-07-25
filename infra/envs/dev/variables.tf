@@ -58,6 +58,12 @@ variable "mail_hostname" {
   default = "mail.naratech.xyz"
 }
 
+# Contact address Let's Encrypt uses for certificate-expiry warnings (M7-T17).
+variable "certbot_email" {
+  type    = string
+  default = "snsknarayana@gmail.com"
+}
+
 # --------------------------------------------------------------------------- #
 # SES outbound relay (M7-T6)
 # --------------------------------------------------------------------------- #
