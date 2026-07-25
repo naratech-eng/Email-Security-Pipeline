@@ -66,6 +66,17 @@ write_files:
         }
       }
 
+  # The dovecot RPM ships a placeholder cert (CN=imap.example.com) and uses it
+  # by default — clients then fail the handshake on a hostname mismatch, which
+  # surfaces only as an opaque "cannot connect". Point Dovecot at the same cert
+  # Postfix uses (generated with a real SAN in runcmd below).
+  - path: /etc/dovecot/conf.d/94-esp-ssl.conf
+    content: |
+      ssl = required
+      ssl_cert = </etc/pki/postfix/postfix.crt
+      ssl_key = </etc/pki/postfix/postfix.key
+      ssl_min_protocol = TLSv1.2
+
   # M7-T4 content_filter: scores each message via the API, tags
   # X-Phishing-Verdict/X-Phishing-Score, re-injects. Fails open on error.
   - path: /usr/local/bin/phishing_filter.py
@@ -183,9 +194,14 @@ runcmd:
   - postconf -e "mailbox_transport = lmtp:unix:private/dovecot-lmtp"
   - newaliases
 
-  # Self-signed TLS cert for Postfix (submission below requires STARTTLS).
+  # Self-signed TLS cert, shared by Postfix submission (587 STARTTLS) and
+  # Dovecot (993 IMAPS / 143 STARTTLS). subjectAltName is required, not
+  # optional: modern clients ignore CN and reject a cert with no matching SAN.
   - mkdir -p /etc/pki/postfix
-  - openssl req -x509 -nodes -newkey rsa:2048 -days 825 -keyout /etc/pki/postfix/postfix.key -out /etc/pki/postfix/postfix.crt -subj "/CN=${mail_hostname}"
+  - openssl req -x509 -nodes -newkey rsa:2048 -days 825 -keyout /etc/pki/postfix/postfix.key -out /etc/pki/postfix/postfix.crt -subj "/CN=${mail_hostname}" -addext "subjectAltName=DNS:${mail_hostname},DNS:${mail_domain}"
+  # Dovecot runs as its own user and must be able to read the shared key.
+  - chgrp dovecot /etc/pki/postfix/postfix.key
+  - chmod 640 /etc/pki/postfix/postfix.key
   - postconf -e "smtpd_tls_cert_file = /etc/pki/postfix/postfix.crt"
   - postconf -e "smtpd_tls_key_file = /etc/pki/postfix/postfix.key"
   - postconf -e "smtpd_tls_security_level = may"

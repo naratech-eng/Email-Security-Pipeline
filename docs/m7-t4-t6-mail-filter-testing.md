@@ -88,13 +88,22 @@ Benign mail → `~/Maildir/new/`. Anything tagged `X-Phishing-Verdict: quarantin
 
 **Read (IMAP):** configure an email client (Thunderbird, Outlook, Mail app) with:
 - **IMAP host:** `mail.naratech.xyz`
-- **Port:** `143` with **STARTTLS**, or `993` with **SSL/TLS** — both verified listening and working.
-- **You must accept the self-signed certificate.** The cert is generated at boot, so no client trusts it. A client that refuses it fails the TLS handshake outright and reports nothing more useful than "cannot connect" — in `/var/log/maillog` this shows up as:
+- **Port:** `143` with **STARTTLS**, or `993` with **SSL/TLS** — both verified working (TLS 1.3, IMAP `LOGIN` succeeds, `INBOX` and `Quarantine` both listed).
+- **You must accept the self-signed certificate**, since it's generated at boot and no client trusts its issuer. Thunderbird and Outlook both prompt on first connect during account setup — accept/continue there. A client that refuses instead fails the handshake outright and reports nothing more useful than "cannot connect"; in `/var/log/maillog` that appears as:
   ```
   imap-login: Disconnected: Connection closed: SSL_accept() failed:
   ... alert bad certificate: SSL alert number 42 (no auth attempts in 0 secs)
   ```
-  Alert 42 is sent *by your client*, not by the server. In Thunderbird this is Settings → Certificates → Manage Certificates → Servers → Add Exception; Outlook and Apple Mail prompt with a "continue anyway" dialog on first connect.
+  Alert 42 is sent *by the client*, not by the server.
+
+Verify the cert from your own machine before blaming the client:
+```bash
+openssl s_client -connect mail.naratech.xyz:993 -servername mail.naratech.xyz </dev/null 2>/dev/null \
+  | openssl x509 -noout -subject -ext subjectAltName -dates
+```
+Expect `subject=CN = mail.naratech.xyz` and a `subjectAltName` containing `DNS:mail.naratech.xyz`. If you instead see **`CN = imap.example.com`**, Dovecot has fallen back to the placeholder cert that ships in the `dovecot` RPM and `/etc/dovecot/conf.d/94-esp-ssl.conf` isn't in effect — no client will connect, because the hostname doesn't match. The SAN matters as much as the CN: modern clients ignore CN entirely and reject a cert whose SAN doesn't cover the hostname.
+
+Note that Thunderbird's **manual** Settings → Certificates → Manage Certificates → Servers → Add Exception dialog is an unreliable way to do this — it frequently reports "No Information Available / Unable to obtain identification status" for IMAP and SMTP ports even when the port is open and the handshake is fine. Prefer the prompt shown during normal account setup.
 - **Username:** just `klara` (not the full address)
 - **Password:** as in §3
 
