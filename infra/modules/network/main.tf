@@ -263,9 +263,24 @@ resource "aws_security_group" "alb_public" {
 resource "aws_security_group" "alb_internal" {
   #checkov:skip=CKV_AWS_382: Open egress needed for internal ALB→ECS in lab
   #checkov:skip=CKV2_AWS_5: SG attached to the internal ALB via var ref in the alb module (cross-module, untraceable by Checkov)
-  name        = "${var.project}-sg-alb-internal"
-  description = "Internal ALB: allow HTTP from VPC (listener is HTTP on 80 — see aws_lb_listener.internal_http, TLS terminated at the public ALB only)"
+  # name_prefix, not name: create_before_destroy below means the replacement SG
+  # exists while the old one is still attached, and a fixed name would collide.
+  name_prefix = "${var.project}-sg-alb-internal-"
+  # ASCII only, and keep it short: AWS rejects a GroupDescription containing any
+  # character outside ASCII with "Character sets beyond ASCII are not supported"
+  # (an em-dash here failed the apply). Details belong in the comments below.
+  description = "Internal ALB: allow HTTP from VPC on port 80"
   vpc_id      = aws_vpc.main.id
+
+  # AWS cannot modify a security group's description, so editing it forces
+  # replacement — and the default destroy-then-create order cannot work while
+  # the internal ALB still references the group: the delete fails with
+  # DependencyViolation and the apply dies partway through (it took the mail
+  # server with it once). create_before_destroy makes Terraform stand up the
+  # new group, repoint the ALB, and only then remove the old one.
+  lifecycle {
+    create_before_destroy = true
+  }
 
   # M7-T6 fix — this was 443 (HTTPS), but the internal listener actually
   # runs HTTP on port 80 (aws_lb_listener.internal_http). Every real
