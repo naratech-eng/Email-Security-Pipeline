@@ -59,6 +59,19 @@ write_files:
         stop;
       }
 
+  # M7-T6 — exposes Dovecot's SASL auth over a Unix socket Postfix's
+  # submission service (port 587) can use, so email clients authenticate
+  # with the same username/password they use for IMAP.
+  - path: /etc/dovecot/conf.d/92-esp-postfix-auth.conf
+    content: |
+      service auth {
+        unix_listener /var/spool/postfix/private/auth {
+          mode = 0666
+          user = postfix
+          group = postfix
+        }
+      }
+
   # M7-T4 — Postfix content_filter. Reads the message on stdin, scores it
   # via the inference API, tags X-Phishing-Verdict/X-Phishing-Score headers,
   # and re-injects into Postfix. Fails open on any error — mail is never
@@ -164,6 +177,14 @@ write_files:
           main()
 
 runcmd:
+  # Debugging/ops access — the official Rocky Linux AMI doesn't ship the SSM
+  # Agent or EC2 Instance Connect by default (unlike Amazon Linux), so
+  # neither silently works without this. Installed first, before anything
+  # else, so access is available even if a later step in this script fails.
+  - dnf install -y https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm || true
+  - systemctl enable --now amazon-ssm-agent || true
+  - dnf install -y ec2-instance-connect || true
+
   # Install packages after EPEL is available (s-nail replaces mailx in Rocky Linux 9)
   # dovecot-pigeonhole = Sieve support (M7-T5); unzip = needed by the AWS CLI installer
   - dnf install -y postfix dovecot dovecot-pigeonhole swaks s-nail unzip
@@ -177,6 +198,35 @@ runcmd:
   - postconf -e "mynetworks = 127.0.0.0/8"
   - postconf -e "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"
   - newaliases
+
+  # M7-T6 — self-signed TLS cert for Postfix, needed for the authenticated
+  # submission service below (mandatory STARTTLS). Dovecot ships its own
+  # default cert for IMAP STARTTLS already; Postfix doesn't, so generate one.
+  - mkdir -p /etc/pki/postfix
+  - openssl req -x509 -nodes -newkey rsa:2048 -days 825 -keyout /etc/pki/postfix/postfix.key -out /etc/pki/postfix/postfix.crt -subj "/CN=${mail_hostname}"
+  - postconf -e "smtpd_tls_cert_file = /etc/pki/postfix/postfix.crt"
+  - postconf -e "smtpd_tls_key_file = /etc/pki/postfix/postfix.key"
+  - postconf -e "smtpd_tls_security_level = may"
+
+  # M7-T6 — authenticated SMTP submission (port 587) so email clients
+  # (Thunderbird, Outlook) can send mail through this server, not just
+  # receive it. Kept entirely separate from port 25: main.cf's global
+  # settings are untouched (25 stays receive-only, no relay), everything
+  # SASL/relay-related is scoped to this service alone via -o overrides.
+  - |
+    cat >> /etc/postfix/master.cf << 'MASTERCF'
+
+    submission inet n - n - - smtpd
+      -o syslog_name=postfix/submission
+      -o smtpd_tls_security_level=encrypt
+      -o smtpd_sasl_auth_enable=yes
+      -o smtpd_sasl_type=dovecot
+      -o smtpd_sasl_path=private/auth
+      -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+      -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+      -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+      -o milter_macro_daemon_name=ORIGINATING
+    MASTERCF
 
   # Create test mail accounts
   - useradd -m testuser1 || true
@@ -245,4 +295,7 @@ final_message: |
   Local test accounts: testuser1, testuser2 (password: ChangeMe123!)
   Named accounts: klara@mail.naratech.xyz, john@mail.naratech.xyz, michael@mail.naratech.xyz
     (passwords: Klara2026! / John2026! / Michael2026! — change on first login)
+  IMAP: port 143 (STARTTLS). SMTP submission: port 587 (STARTTLS, SASL login
+  with the same username/password as IMAP) — for clients to send mail out,
+  not just receive it.
   Run: swaks --to testuser2@localhost --from testuser1@localhost
