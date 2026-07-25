@@ -111,11 +111,66 @@ Look at message headers in the client (usually "View Source" / "Show Original") 
 
 **Send (client → someone else, e.g. klara → testuser1):** configure SMTP submission on the same account:
 - **SMTP host:** `mail.naratech.xyz`
-- **Port:** `587`, **Connection security: STARTTLS**, **Authentication: Normal password (SASL)**
+- **Port:** `587` — **not 25**, see below. **Connection security: STARTTLS**, **Authentication: Normal password (SASL)**
 - **Username/password:** same as IMAP (`klara` / `Klara2026!`, etc.)
 - This is authenticated-only — an unauthenticated client can't relay through this server. Port 25 stays receive-only for inbound MX traffic; it's not a relay.
 
-**Sending to a real external address (e.g. back to Gmail):** if that doesn't go through, check whether AWS's default outbound-port-25 block has been lifted for this account (EC2 console → request removal of email sending limitations) — an AWS account-level restriction outside Terraform's control, unrelated to the submission service above (which only handles the client → server hop; server → external internet still goes out over port 25).
+> **If sending fails with `554 5.7.1 <addr>: Relay access denied`, the client is on port 25, not 587.** Port 25 applies `reject_unauth_destination` and correctly refuses to relay to external domains; only the submission service on 587 permits relaying, and only for SASL-authenticated senders. Confirm which service handled it — the log line names the port's service:
+> ```bash
+> sudo grep -E 'postfix/(smtpd|submission)' /var/log/maillog | tail
+> ```
+> `postfix/smtpd` is port 25; `postfix/submission/smtpd` is 587. Fix the client's outgoing port rather than loosening port 25's restrictions.
+>
+> Note that Thunderbird stores certificate exceptions **per host:port**, so the exception accepted for IMAP on 993 does not cover SMTP on 587, and Thunderbird never prompts for the SMTP one — it just fails with "The certificate is not trusted because it is self-signed." Importing the cert once under Certificates → Authorities covers every port at once, which is easier than chasing per-port exceptions:
+> ```bash
+> openssl s_client -connect mail.naratech.xyz:993 -servername mail.naratech.xyz </dev/null 2>/dev/null \
+>   | openssl x509 -outform PEM > naratech-mail.crt
+> ```
+
+## 5a. Outbound to external providers — SES relay + SPF/DKIM/DMARC
+
+Sending to Gmail (or any external provider) **cannot** work by direct MX delivery from this instance. Three independent blockers, all verified:
+
+| Blocker | Verified state | Fixable in Terraform? |
+|---|---|---|
+| AWS blocks outbound TCP/25 from EC2 | Gmail MX on `:25` times out; `:587` is open | No — needs an AWS Support request |
+| No PTR/reverse DNS for the instance IP | `dig -x 3.239.180.27` → empty | No — needs an AWS Support request on an EIP |
+| No SPF/DKIM/DMARC records | Now published by `modules/ses_relay` | Yes |
+
+Publishing SPF/DKIM/DMARC alone would **not** have fixed this — the port-25 block stops mail before any recipient policy is consulted. So outbound relays through Amazon SES on `:587` (`modules/ses_relay`), which sidesteps the port block, brings its own IP reputation and PTR, and DKIM-signs as `mail.naratech.xyz` so mail still comes from `klara@mail.naratech.xyz` rather than a third-party identity.
+
+**Authentication records** (all in the `mail.naratech.xyz` Route53 zone — note the apex `naratech.xyz` is hosted at the registrar, not Route53, so records can only be published on the subdomain):
+
+| Record | Value | Purpose |
+|---|---|---|
+| 3× `<token>._domainkey` CNAME | `<token>.dkim.amazonses.com` | SES Easy DKIM signing keys |
+| `mail.naratech.xyz` TXT | `v=spf1 a mx include:amazonses.com ~all` | Authorises the instance and SES to send |
+| `_dmarc.mail.naratech.xyz` TXT | `v=DMARC1; p=none; rua=...; fo=1` | Monitor-only policy + aggregate reports |
+
+DMARC passes here on **DKIM alignment**, not SPF: without a custom MAIL FROM domain the SPF check authenticates `amazonses.com`, which doesn't align with the From domain. DKIM signs as `mail.naratech.xyz`, which does. `p=none` is deliberate — tighten to `quarantine`/`reject` only after the aggregate reports confirm legitimate mail is passing, since starting at `p=reject` is how you silently lose real mail.
+
+**⚠️ SES is in the sandbox** (`ProductionAccess: false`, 200 msg/day, 1 msg/sec). Mail is delivered **only to verified recipient addresses**. `ses_sandbox_verified_recipients` in `infra/envs/dev/variables.tf` verifies them; **AWS emails each address a confirmation link that its owner must click** before delivery works. To send to arbitrary recipients, request production access in the SES console — then empty that list.
+
+Verify the whole outbound path after applying:
+```bash
+# 1. DNS published and propagated
+dig +short TXT mail.naratech.xyz
+dig +short TXT _dmarc.mail.naratech.xyz
+aws sesv2 get-email-identity --email-identity mail.naratech.xyz \
+  --profile lab-user --region us-east-1 \
+  --query "{Verified:VerifiedForSendingStatus,DkimStatus:DkimAttributes.Status}"
+
+# 2. Postfix is relaying, credentials loaded (on the instance)
+postconf relayhost smtp_sasl_auth_enable smtp_tls_security_level
+sudo ls -l /etc/postfix/sasl_passwd.db     # must exist
+
+# 3. Send, then watch for a 250 from SES rather than a timeout
+swaks --to <a-verified-address> --from klara@mail.naratech.xyz --server 127.0.0.1
+sudo grep 'email-smtp' /var/log/maillog | tail -5
+```
+Delivered mail should show `dkim=pass` and `spf=pass` in the recipient's "Show original" / Authentication-Results header. `554 Message rejected: Email address is not verified` means the recipient isn't in the verified list and SES is still sandboxed.
+
+The SES IAM policy is deliberately constrained to `ses:FromAddress` matching `*@mail.naratech.xyz`, so a leaked SMTP credential can't be used to send as an arbitrary domain. The trade-off: **relaying outbound mail whose From address is not in our domain will be denied**, which rules out plain forwarding of external mail back out. Sending as our own users — the actual use case — is unaffected. An `AccessDenied` on send with a non-local From address is this condition working, not a misconfiguration.
 
 ## 6. Troubleshooting
 

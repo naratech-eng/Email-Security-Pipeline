@@ -8,8 +8,6 @@ package_upgrade: true
 packages:
   - epel-release
 
-# postfix, dovecot, swaks, s-nail installed in runcmd after EPEL is available
-
 write_files:
   - path: /etc/dovecot/conf.d/10-mail.conf
     content: |
@@ -48,12 +46,10 @@ write_files:
         }
       }
 
-  # Postfix must hand final delivery to Dovecot over LMTP, not to its own
-  # `local` transport — `local` writes mbox to /var/spool/mail/$user, which
-  # Dovecot (mail_location = maildir:~/Maildir) cannot see, so IMAP shows an
-  # empty inbox. LMTP also is where Sieve runs, so quarantine routing needs it.
-  # auth_username_format strips the domain: PAM/system users are "klara", but
-  # LMTP hands over the full "klara@mail.naratech.xyz".
+  # LMTP, not Postfix's `local`: `local` writes mbox to /var/spool/mail/$user,
+  # which Dovecot (maildir:~/Maildir) cannot see, so IMAP shows an empty inbox.
+  # Sieve also only runs under LMTP. auth_username_format strips the domain —
+  # PAM users are "klara", LMTP hands over "klara@mail.naratech.xyz".
   - path: /etc/dovecot/conf.d/93-esp-lmtp.conf
     content: |
       protocols = imap lmtp sieve
@@ -66,10 +62,9 @@ write_files:
         }
       }
 
-  # The dovecot RPM ships a placeholder cert (CN=imap.example.com) and uses it
-  # by default — clients then fail the handshake on a hostname mismatch, which
-  # surfaces only as an opaque "cannot connect". Point Dovecot at the same cert
-  # Postfix uses (generated with a real SAN in runcmd below).
+  # The dovecot RPM ships a placeholder cert (CN=imap.example.com); clients
+  # then fail the handshake on a hostname mismatch, surfacing only as an opaque
+  # "cannot connect". Use the same cert Postfix does (real SAN, see runcmd).
   - path: /etc/dovecot/conf.d/94-esp-ssl.conf
     content: |
       ssl = required
@@ -173,8 +168,7 @@ write_files:
           main()
 
 runcmd:
-  # Rocky's official AMI ships neither SSM Agent nor EC2 Instance Connect
-  # (unlike Amazon Linux) — install first so access survives later failures.
+  # Rocky's AMI ships neither SSM Agent nor EC2 Instance Connect; install first.
   - dnf install -y https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm || true
   - systemctl enable --now amazon-ssm-agent || true
   - dnf install -y ec2-instance-connect || true
@@ -194,9 +188,8 @@ runcmd:
   - postconf -e "mailbox_transport = lmtp:unix:private/dovecot-lmtp"
   - newaliases
 
-  # Self-signed TLS cert, shared by Postfix submission (587 STARTTLS) and
-  # Dovecot (993 IMAPS / 143 STARTTLS). subjectAltName is required, not
-  # optional: modern clients ignore CN and reject a cert with no matching SAN.
+  # Self-signed cert shared by Postfix submission (587) and Dovecot (993/143).
+  # subjectAltName is mandatory: clients ignore CN and reject a cert with no SAN.
   - mkdir -p /etc/pki/postfix
   - openssl req -x509 -nodes -newkey rsa:2048 -days 825 -keyout /etc/pki/postfix/postfix.key -out /etc/pki/postfix/postfix.crt -subj "/CN=${mail_hostname}" -addext "subjectAltName=DNS:${mail_hostname},DNS:${mail_domain}"
   # Dovecot runs as its own user and must be able to read the shared key.
@@ -236,7 +229,7 @@ runcmd:
   - echo "john:John2026!" | chpasswd
   - echo "michael:Michael2026!" | chpasswd
 
-  # Official AWS CLI installer — not reliably packaged for RHEL9 via EPEL.
+  # Official installer — AWS CLI isn't reliably packaged for RHEL9 via EPEL.
   - curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
   - unzip -q /tmp/awscliv2.zip -d /tmp
   - /tmp/aws/install
@@ -254,12 +247,27 @@ runcmd:
   - chmod 600 /etc/esp/api-token
   - chown filter:filter /etc/esp/api-token
 
-  # Scoped to the port-25 smtp service only (not set globally in main.cf) —
-  # otherwise the filter's own sendmail re-injection (which comes in via
-  # `pickup`, not `smtp`) gets filtered again, forever: pipe -> reinject ->
-  # pickup -> pipe -> reinject -> ... an infinite loop that never reaches
-  # Dovecot. $${sender}/$${recipient} are Postfix's own placeholders,
-  # escaped so Terraform's templatefile() doesn't interpolate them itself.
+  # M7-T6: AWS blocks outbound :25 from EC2, so external mail relays via SES
+  # on :587, which also DKIM-signs it. See modules/ses_relay.
+  - >-
+    aws secretsmanager get-secret-value
+    --secret-id ${ses_smtp_secret_arn}
+    --region us-east-1
+    --query SecretString --output text > /tmp/ses.json
+  - python3 -c "import json;d=json.load(open('/tmp/ses.json'));print('${ses_relay_host} %s:%s'%(d['username'],d['password']))" > /etc/postfix/sasl_passwd
+  - rm -f /tmp/ses.json
+  - postmap /etc/postfix/sasl_passwd
+  - chmod 600 /etc/postfix/sasl_passwd /etc/postfix/sasl_passwd.db
+  - postconf -e "relayhost = ${ses_relay_host}"
+  - postconf -e "smtp_sasl_auth_enable = yes"
+  - postconf -e "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
+  - postconf -e "smtp_sasl_security_options = noanonymous"
+  - postconf -e "smtp_tls_security_level = encrypt"
+
+  # Scoped to the port-25 smtp service, never global: the filter's own sendmail
+  # re-injection arrives via `pickup`, so a global setting refilters it forever
+  # (pipe -> reinject -> pickup -> pipe -> ...) and mail never reaches Dovecot.
+  # $${sender}/$${recipient} are Postfix placeholders, escaped from templatefile().
   - postconf -P 'smtp/inet/content_filter=phishing-filter:dummy'
   - |
     cat >> /etc/postfix/master.cf << 'MASTERCF'

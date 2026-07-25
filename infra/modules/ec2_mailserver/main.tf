@@ -4,6 +4,23 @@
 # Route53 A record for mail.naratech.xyz managed here
 ###############################################################################
 
+# Rendered once here so the size guard below and the instance both use exactly
+# the same bytes. EC2 caps user_data at 16384; because the value handed to
+# aws_instance.user_data is already base64, that cap applies to the *encoded*
+# string, leaving roughly 12.3 KB of actual YAML. Exceeding it aborts the whole
+# apply with a message that names no resource, so the precondition below turns
+# it into a clear plan-time failure instead.
+locals {
+  mail_user_data = base64encode(templatefile("${path.module}/cloud-init.yml", {
+    mail_domain                = var.mail_domain
+    mail_hostname              = var.mail_hostname
+    jwt_signing_key_secret_arn = var.jwt_signing_key_secret_arn
+    api_internal_url           = var.api_internal_url
+    ses_smtp_secret_arn        = var.ses_smtp_secret_arn
+    ses_relay_host             = var.ses_relay_host
+  }))
+}
+
 data "aws_ami" "rocky9" {
   most_recent = true
   owners      = ["679593333241"] # Rocky Linux official AWS account
@@ -43,19 +60,23 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# M7-T4 — read-only access to exactly the one secret this instance needs:
-# the JWT signing key, fetched once at boot to authenticate content_filter
-# calls to the internal inference API.
-resource "aws_iam_role_policy" "jwt_secret_read" {
-  name = "jwt-signing-key-read"
+# Read-only access to exactly the two secrets this instance needs and no
+# others: the JWT signing key, for authenticating content_filter calls to the
+# internal inference API (M7-T4), and the SES SMTP credentials for the outbound
+# relay (M7-T6). Both are fetched once at boot.
+resource "aws_iam_role_policy" "secrets_read" {
+  name = "mail-server-secrets-read"
   role = aws_iam_role.ssm.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["secretsmanager:GetSecretValue"]
-      Resource = [var.jwt_signing_key_secret_arn]
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = [
+        var.jwt_signing_key_secret_arn,
+        var.ses_smtp_secret_arn,
+      ]
     }]
   })
 }
@@ -92,18 +113,20 @@ resource "aws_instance" "mail" {
     delete_on_termination = true
   }
 
-  user_data = base64encode(templatefile("${path.module}/cloud-init.yml", {
-    mail_domain                = var.mail_domain
-    mail_hostname              = var.mail_hostname
-    jwt_signing_key_secret_arn = var.jwt_signing_key_secret_arn
-    api_internal_url           = var.api_internal_url
-  }))
+  user_data = local.mail_user_data
   # Cloud-init only runs on first boot — without this, editing cloud-init.yml
   # later would silently update the stored user_data but never actually run
   # on the live instance. Force a clean replace when the rendered content
   # actually changes (i.e. only on real cloud-init edits, not on unrelated
   # applies elsewhere in the stack).
   user_data_replace_on_change = true
+
+  lifecycle {
+    precondition {
+      condition     = length(local.mail_user_data) <= 16384
+      error_message = "Rendered cloud-init user_data is ${length(local.mail_user_data)} bytes base64-encoded, over EC2's 16384 limit. Trim cloud-init.yml, or move large embedded files (phishing_filter.py) to S3 and fetch them at boot."
+    }
+  }
 
   tags = {
     Name    = "${var.project}-mail-server"

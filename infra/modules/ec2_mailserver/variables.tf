@@ -43,3 +43,13 @@ variable "api_internal_url" {
   type        = string
   description = "Internal ALB DNS name for the inference API (M7-T4 content_filter target)"
 }
+
+variable "ses_smtp_secret_arn" {
+  type        = string
+  description = "Secrets Manager ARN holding {username, password} for SES SMTP auth (M7-T6 outbound relay) — fetched at boot to build /etc/postfix/sasl_passwd"
+}
+
+variable "ses_relay_host" {
+  type        = string
+  description = "Postfix relayhost for outbound mail, e.g. [email-smtp.us-east-1.amazonaws.com]:587. Required because AWS blocks outbound TCP/25 from EC2, so mail cannot reach recipient MXs directly."
+}
