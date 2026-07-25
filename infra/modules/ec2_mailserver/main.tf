@@ -18,7 +18,30 @@ locals {
     api_internal_url           = var.api_internal_url
     ses_smtp_secret_arn        = var.ses_smtp_secret_arn
     ses_relay_host             = var.ses_relay_host
+    scripts_bucket             = var.scripts_bucket
+    certbot_email              = var.certbot_email
   }))
+}
+
+# Uploaded by Terraform so the instance can fetch these at boot. Both grew too
+# large to embed in user_data (phishing_filter.py first, then the M7-T17
+# certbot logic on top of it) -- etag ties each object to its file's content,
+# so editing either re-uploads it without forcing an instance replacement.
+locals {
+  scripts = {
+    "phishing_filter.py" = { path = "files/phishing_filter.py", content_type = "text/x-python" }
+    "setup-certbot.sh"   = { path = "files/setup-certbot.sh", content_type = "text/x-shellscript" }
+  }
+}
+
+resource "aws_s3_object" "scripts" {
+  for_each = local.scripts
+
+  bucket       = var.scripts_bucket
+  key          = each.key
+  source       = "${path.module}/${each.value.path}"
+  etag         = filemd5("${path.module}/${each.value.path}")
+  content_type = each.value.content_type
 }
 
 data "aws_ami" "rocky9" {
@@ -81,6 +104,69 @@ resource "aws_iam_role_policy" "secrets_read" {
   })
 }
 
+# Read-only on the specific script objects the instance fetches at boot, not
+# the whole bucket. KMS decrypt is required because the bucket is SSE-KMS with
+# the AWS-managed aws/s3 key -- s3:GetObject alone returns AccessDenied there.
+resource "aws_iam_role_policy" "scripts_read" {
+  name = "mail-server-scripts-read"
+  role = aws_iam_role.ssm.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = [for k in keys(local.scripts) : "arn:aws:s3:::${var.scripts_bucket}/${k}"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "s3.us-east-1.amazonaws.com"
+          }
+        }
+      },
+    ]
+  })
+}
+
+# M7-T17 — certbot's DNS-01 challenge writes a _acme-challenge TXT record into
+# the mail zone and polls for propagation. Scoped to that one hosted zone;
+# ListHostedZones and GetChange are account-level calls the plugin needs to
+# resolve the zone and wait for the change to land, and cannot be narrowed.
+resource "aws_iam_role_policy" "certbot_dns" {
+  name = "mail-server-certbot-dns01"
+  role = aws_iam_role.ssm.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["route53:ChangeResourceRecordSets"]
+        Resource = ["arn:aws:route53:::hostedzone/${var.mail_zone_id}"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["route53:GetChange"]
+        Resource = ["arn:aws:route53:::change/*"]
+      },
+      {
+        # ListHostedZones is an account-level call with no resource ARN at all,
+        # so "*" is the only valid value -- it is also read-only and returns
+        # zone names, which the plugin needs to map the domain to a zone.
+        #checkov:skip=CKV_AWS_355: route53:ListHostedZones does not support resource-level permissions
+        Effect   = "Allow"
+        Action   = ["route53:ListHostedZones"]
+        Resource = "*"
+      },
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "ssm" {
   name = "${var.project}-mail-ssm-profile"
   role = aws_iam_role.ssm.name
@@ -120,6 +206,18 @@ resource "aws_instance" "mail" {
   # actually changes (i.e. only on real cloud-init edits, not on unrelated
   # applies elsewhere in the stack).
   user_data_replace_on_change = true
+
+  # cloud-init fetches the filter script from S3 and certbot calls Route53
+  # during boot. Terraform infers no ordering from user_data being a string,
+  # so without these it may create the instance in parallel with the object
+  # and the policies -- the instance would then boot into a failed fetch or an
+  # AccessDenied on the ACME challenge.
+  depends_on = [
+    aws_s3_object.scripts,
+    aws_iam_role_policy.scripts_read,
+    aws_iam_role_policy.secrets_read,
+    aws_iam_role_policy.certbot_dns,
+  ]
 
   lifecycle {
     precondition {

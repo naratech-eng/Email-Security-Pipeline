@@ -59,6 +59,16 @@ module "s3_logs" {
   enable_lifecycle = false
 }
 
+# Holds phishing_filter.py, which the mail server fetches at boot. Kept out of
+# user_data because that has a hard 16384-byte limit the script outgrew.
+module "s3_scripts" {
+  source           = "../../modules/s3_bucket"
+  project          = var.project
+  purpose          = "scripts"
+  bucket_name      = "${var.project}-scripts-${var.aws_region}-802531654188"
+  enable_lifecycle = false
+}
+
 # --------------------------------------------------------------------------- #
 # ECR
 # --------------------------------------------------------------------------- #
@@ -186,6 +196,8 @@ module "mail_server" {
   api_internal_url           = module.alb.internal_alb_dns
   ses_smtp_secret_arn        = module.ses_relay.smtp_credentials_secret_arn
   ses_relay_host             = module.ses_relay.relay_host
+  scripts_bucket             = module.s3_scripts.bucket_id
+  certbot_email              = var.certbot_email
 }
 
 # --------------------------------------------------------------------------- #

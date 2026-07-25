@@ -72,101 +72,6 @@ write_files:
       ssl_key = </etc/pki/postfix/postfix.key
       ssl_min_protocol = TLSv1.2
 
-  # M7-T4 content_filter: scores each message via the API, tags
-  # X-Phishing-Verdict/X-Phishing-Score, re-injects. Fails open on error.
-  - path: /usr/local/bin/phishing_filter.py
-    permissions: '0755'
-    content: |
-      #!/usr/bin/env python3
-      import json
-      import subprocess
-      import sys
-      import urllib.error
-      import urllib.request
-
-      API_URL = "http://${api_internal_url}/analyze/email"
-      TOKEN_FILE = "/etc/esp/api-token"
-      TIMEOUT = 45  # first call after an ECS task start loads models from S3 (~20-40s); warm calls are ~0.3s
-      SENDMAIL = "/usr/sbin/sendmail"
-
-
-      def read_token():
-          try:
-              with open(TOKEN_FILE) as f:
-                  return f.read().strip()
-          except Exception:
-              return None
-
-
-      def score(raw_message: bytes):
-          token = read_token()
-          boundary = "----espfilterboundary"
-          # source=server tags mail-path detections (vs dashboard upload/paste)
-          body = (
-              ("--" + boundary + "\r\n"
-               'Content-Disposition: form-data; name="source"\r\n\r\n'
-               "server\r\n"
-               "--" + boundary + "\r\n"
-               'Content-Disposition: form-data; name="file"; filename="msg.eml"\r\n'
-               "Content-Type: message/rfc822\r\n\r\n").encode()
-              + raw_message
-              + ("\r\n--" + boundary + "--\r\n").encode()
-          )
-          headers = {"Content-Type": "multipart/form-data; boundary=" + boundary}
-          if token:
-              headers["Authorization"] = "Bearer " + token
-
-          req = urllib.request.Request(API_URL, data=body, headers=headers, method="POST")
-          try:
-              with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-                  return json.loads(resp.read())
-          except Exception as e:
-              sys.stderr.write("phishing_filter: API call failed, failing open: " + str(e) + "\n")
-              return None
-
-
-      def tag_headers(raw_message: bytes, verdict_json) -> bytes:
-          if verdict_json is None:
-              return raw_message  # fail open — deliver unmodified
-          verdict = verdict_json.get("verdict", "clean")
-          likelihood = verdict_json.get("likelihood", 0)
-          header = ("X-Phishing-Verdict: " + str(verdict) + "\r\n"
-                     "X-Phishing-Score: " + str(likelihood) + "\r\n").encode()
-          return header + raw_message
-
-
-      def deliver(message: bytes, sender: str, recipients: list) -> int:
-          # -G skips content_filter again (no re-scoring loop); -i keeps a
-          # lone "." line from being treated as end-of-message.
-          proc = subprocess.run(
-              [SENDMAIL, "-G", "-i", "-f", sender, "--"] + recipients,
-              input=message,
-          )
-          return proc.returncode
-
-
-      def main():
-          args = sys.argv[1:]
-          if "-f" not in args or "--" not in args:
-              sys.stderr.write("usage: phishing_filter.py -f <sender> -- <recipient...>\n")
-              sys.exit(1)
-          sender = args[args.index("-f") + 1]
-          recipients = args[args.index("--") + 1:]
-          raw = sys.stdin.buffer.read()
-
-          try:
-              verdict_json = score(raw)
-              out = tag_headers(raw, verdict_json)
-          except Exception as e:
-              sys.stderr.write("phishing_filter: unexpected error, failing open: " + str(e) + "\n")
-              out = raw  # never lose or block mail
-
-          sys.exit(deliver(out, sender, recipients))
-
-
-      if __name__ == "__main__":
-          main()
-
 runcmd:
   # Rocky's AMI ships neither SSM Agent nor EC2 Instance Connect; install first.
   - dnf install -y https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm || true
@@ -190,7 +95,7 @@ runcmd:
   - postconf -e "mailbox_transport = lmtp:unix:private/dovecot-lmtp"
   - newaliases
 
-  # Self-signed cert shared by Postfix submission (587) and Dovecot (993/143).
+  # Self-signed fallback, generated first so TLS works even if certbot fails.
   # subjectAltName is mandatory: clients ignore CN and reject a cert with no SAN.
   - mkdir -p /etc/pki/postfix
   - openssl req -x509 -nodes -newkey rsa:2048 -days 825 -keyout /etc/pki/postfix/postfix.key -out /etc/pki/postfix/postfix.crt -subj "/CN=${mail_hostname}" -addext "subjectAltName=DNS:${mail_hostname},DNS:${mail_domain}"
@@ -232,10 +137,23 @@ runcmd:
   - echo "michael:Michael2026!" | chpasswd
 
   # Official installer — AWS CLI isn't reliably packaged for RHEL9 via EPEL.
+  # Everything below that fetches from S3 or Secrets Manager depends on this,
+  # so it must stay above all of them.
   - curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
   - unzip -q /tmp/awscliv2.zip -d /tmp
   - /tmp/aws/install
   - rm -rf /tmp/awscliv2.zip /tmp/aws
+
+  # M7-T17: real cert, fetched from S3 like phishing_filter.py -- installs
+  # certbot, issues via DNS-01/Route53, and repoints the renewal timer if the
+  # pip fallback fired. See files/setup-certbot.sh for the full rationale.
+  # Runs after the AWS CLI install above because it needs `aws s3 cp`. Failure
+  # is non-fatal: the self-signed cert generated earlier stays in place, and
+  # postfix/dovecot are not started until the end of runcmd either way.
+  - >-
+    aws s3 cp s3://${scripts_bucket}/setup-certbot.sh /tmp/setup-certbot.sh --region us-east-1
+    && sh /tmp/setup-certbot.sh ${mail_hostname} ${certbot_email}
+    || echo "setup-certbot.sh fetch/run failed, staying on the self-signed cert"
 
   - useradd -r -s /sbin/nologin filter || true
 
@@ -248,6 +166,20 @@ runcmd:
     --query SecretString --output text > /etc/esp/api-token
   - chmod 600 /etc/esp/api-token
   - chown filter:filter /etc/esp/api-token
+
+  # Script lives in S3: with the M7-T16 circuit breaker it no longer fits in
+  # user_data. Reads its target from /etc/esp/api-url so the object is generic.
+  - echo "http://${api_internal_url}" > /etc/esp/api-url
+  # Fetch failure falls back to a pass-through that re-injects unscored: a
+  # missing script would defer ALL mail, the one outcome we must never produce.
+  - |
+    aws s3 cp s3://${scripts_bucket}/phishing_filter.py /usr/local/bin/phishing_filter.py --region us-east-1 || \
+    printf '#!/usr/bin/env python3\nimport subprocess,sys\na=sys.argv[1:]\ns=a[a.index("-f")+1]\nr=a[a.index("--")+1:]\nsys.stderr.write("phishing_filter: S3 fetch failed at boot, passing mail through unscored\\n")\nsys.exit(subprocess.run(["/usr/sbin/sendmail","-G","-i","-f",s,"--"]+r,input=sys.stdin.buffer.read()).returncode)\n' > /usr/local/bin/phishing_filter.py
+  - chmod 0755 /usr/local/bin/phishing_filter.py
+  # Circuit-breaker state, owned by the filter user; seeded with valid JSON.
+  - echo '{"failures":0,"opened_at":0}' > /etc/esp/circuit-state.json
+  - chown filter:filter /etc/esp /etc/esp/circuit-state.json
+  - chmod 0644 /etc/esp/circuit-state.json
 
   # M7-T6: AWS blocks outbound :25 from EC2, so external mail relays via SES
   # on :587, which also DKIM-signs it. See modules/ses_relay.
@@ -293,5 +225,7 @@ final_message: |
   Local test accounts: testuser1, testuser2 (password: ChangeMe123!)
   Named accounts: klara@mail.naratech.xyz, john@mail.naratech.xyz, michael@mail.naratech.xyz
     (passwords: Klara2026! / John2026! / Michael2026! — change on first login)
-  IMAP: port 143 (STARTTLS). SMTP submission: port 587 (STARTTLS, SASL).
+  IMAP: 993 (SSL/TLS) or 143 (STARTTLS). SMTP submission: 587 (STARTTLS, SASL).
+  TLS: Let's Encrypt if issued, else self-signed. Check:
+    openssl s_client -connect ${mail_hostname}:993 | head -3
   Run: swaks --to testuser2@localhost --from testuser1@localhost
