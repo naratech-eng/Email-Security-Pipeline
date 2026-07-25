@@ -15,10 +15,26 @@ Postfix (SMTP, port 25)
       → tags X-Phishing-Verdict / X-Phishing-Score headers
       → fails open on any error (never blocks or loses mail)
   → re-injected into Postfix (sendmail -G)
-  → Dovecot LMTP delivery
+  → Dovecot LMTP delivery (mailbox_transport, NOT Postfix's own `local`)
       → Sieve: X-Phishing-Verdict: quarantine → "Quarantine" folder
       → everything else → INBOX
+  → the API also persists a row to the RDS detections table (source=server),
+    readable via GET /detections and shown on the analyst dashboard
 ```
+
+Two links in this chain are easy to break silently and worth knowing about:
+
+- The `content_filter` is scoped to the **port-25 `smtp` service only** (`postconf -P 'smtp/inet/content_filter=...'`), never set globally. Set globally, the filter's own `sendmail` re-injection arrives via `pickup`, gets filtered again, re-injects, and loops forever — mail never reaches Dovecot. `sendmail -G` does **not** prevent this; `-G` only affects address rewriting, not `content_filter` routing.
+- Final delivery **must** go over LMTP. Postfix's `local` transport writes mbox to `/var/spool/mail/$user`, which Dovecot cannot see, and Sieve only runs under LMTP — so mail gets received and scored but never appears over IMAP. See §6.
+
+**Verified end-to-end** (inbound → scored → filed → persisted):
+
+| Test message | Verdict | Score | Filed into | RDS row |
+|---|---|---|---|---|
+| "Lunch tomorrow", no URLs | `clean` | 20.7 | INBOX | yes, `source=server` |
+| "Urgent verify your account" + `http://paypa1-secure.tk/verify` | `quarantine` | 88.2 | `Quarantine` | yes, `source=server` |
+
+> **Note on the running instance.** All of the fixes above were first applied live over SSM to verify them without burning an instance-replace cycle, *then* written back into `cloud-init.yml`. The live instance and the Terraform code now agree behaviourally, but Terraform still sees changed `user_data` — and `user_data_replace_on_change = true` means the next `terraform apply` touching this module **will replace the instance** (mailboxes are on the root volume and are not preserved). That replace is safe whenever you're ready for it, since cloud-init now reproduces the working configuration from scratch; just don't run it mid-demo.
 
 ## 2. ⚠️ Known limitation — attachments are not scanned
 
@@ -72,8 +88,22 @@ Benign mail → `~/Maildir/new/`. Anything tagged `X-Phishing-Verdict: quarantin
 
 **Read (IMAP):** configure an email client (Thunderbird, Outlook, Mail app) with:
 - **IMAP host:** `mail.naratech.xyz`
-- **Port:** `143` with **STARTTLS** — verified working (real TLS 1.3 handshake). **Port 993 (IMAPS/implicit TLS) does not currently work** — Dovecot's default install doesn't enable that listener even though the port is open at the security-group level; use 143+STARTTLS instead until this is fixed.
-- Client will warn about the self-signed cert — accept/add the exception, expected for a dev cert.
+- **Port:** `143` with **STARTTLS**, or `993` with **SSL/TLS** — both verified working (TLS 1.3, IMAP `LOGIN` succeeds, `INBOX` and `Quarantine` both listed).
+- **You must accept the self-signed certificate**, since it's generated at boot and no client trusts its issuer. Thunderbird and Outlook both prompt on first connect during account setup — accept/continue there. A client that refuses instead fails the handshake outright and reports nothing more useful than "cannot connect"; in `/var/log/maillog` that appears as:
+  ```
+  imap-login: Disconnected: Connection closed: SSL_accept() failed:
+  ... alert bad certificate: SSL alert number 42 (no auth attempts in 0 secs)
+  ```
+  Alert 42 is sent *by the client*, not by the server.
+
+Verify the cert from your own machine before blaming the client:
+```bash
+openssl s_client -connect mail.naratech.xyz:993 -servername mail.naratech.xyz </dev/null 2>/dev/null \
+  | openssl x509 -noout -subject -ext subjectAltName -dates
+```
+Expect `subject=CN = mail.naratech.xyz` and a `subjectAltName` containing `DNS:mail.naratech.xyz`. If you instead see **`CN = imap.example.com`**, Dovecot has fallen back to the placeholder cert that ships in the `dovecot` RPM and `/etc/dovecot/conf.d/94-esp-ssl.conf` isn't in effect — no client will connect, because the hostname doesn't match. The SAN matters as much as the CN: modern clients ignore CN entirely and reject a cert whose SAN doesn't cover the hostname.
+
+Note that Thunderbird's **manual** Settings → Certificates → Manage Certificates → Servers → Add Exception dialog is an unreliable way to do this — it frequently reports "No Information Available / Unable to obtain identification status" for IMAP and SMTP ports even when the port is open and the handshake is fine. Prefer the prompt shown during normal account setup.
 - **Username:** just `klara` (not the full address)
 - **Password:** as in §3
 
@@ -81,11 +111,91 @@ Look at message headers in the client (usually "View Source" / "Show Original") 
 
 **Send (client → someone else, e.g. klara → testuser1):** configure SMTP submission on the same account:
 - **SMTP host:** `mail.naratech.xyz`
-- **Port:** `587`, **Connection security: STARTTLS**, **Authentication: Normal password (SASL)**
+- **Port:** `587` — **not 25**, see below. **Connection security: STARTTLS**, **Authentication: Normal password (SASL)**
 - **Username/password:** same as IMAP (`klara` / `Klara2026!`, etc.)
 - This is authenticated-only — an unauthenticated client can't relay through this server. Port 25 stays receive-only for inbound MX traffic; it's not a relay.
 
-**Sending to a real external address (e.g. back to Gmail):** if that doesn't go through, check whether AWS's default outbound-port-25 block has been lifted for this account (EC2 console → request removal of email sending limitations) — an AWS account-level restriction outside Terraform's control, unrelated to the submission service above (which only handles the client → server hop; server → external internet still goes out over port 25).
+> **If sending fails with `554 5.7.1 <addr>: Relay access denied`, the client is on port 25, not 587.** Port 25 applies `reject_unauth_destination` and correctly refuses to relay to external domains; only the submission service on 587 permits relaying, and only for SASL-authenticated senders. Confirm which service handled it — the log line names the port's service:
+> ```bash
+> sudo grep -E 'postfix/(smtpd|submission)' /var/log/maillog | tail
+> ```
+> `postfix/smtpd` is port 25; `postfix/submission/smtpd` is 587. Fix the client's outgoing port rather than loosening port 25's restrictions.
+>
+> Note that Thunderbird stores certificate exceptions **per host:port**, so the exception accepted for IMAP on 993 does not cover SMTP on 587, and Thunderbird never prompts for the SMTP one — it just fails with "The certificate is not trusted because it is self-signed." Importing the cert once under Certificates → Authorities covers every port at once, which is easier than chasing per-port exceptions:
+> ```bash
+> openssl s_client -connect mail.naratech.xyz:993 -servername mail.naratech.xyz </dev/null 2>/dev/null \
+>   | openssl x509 -outform PEM > naratech-mail.crt
+> ```
+
+## 5a. Outbound to external providers — SES relay + SPF/DKIM/DMARC
+
+Sending to Gmail (or any external provider) **cannot** work by direct MX delivery from this instance. Three independent blockers, all verified:
+
+| Blocker | Verified state | Fixable in Terraform? |
+|---|---|---|
+| AWS blocks outbound TCP/25 from EC2 | Gmail MX on `:25` times out; `:587` is open | No — needs an AWS Support request |
+| No PTR/reverse DNS for the instance IP | `dig -x 3.239.180.27` → empty | No — needs an AWS Support request on an EIP |
+| No SPF/DKIM/DMARC records | Now published by `modules/ses_relay` | Yes |
+
+Publishing SPF/DKIM/DMARC alone would **not** have fixed this — the port-25 block stops mail before any recipient policy is consulted. So outbound relays through Amazon SES on `:587` (`modules/ses_relay`), which sidesteps the port block, brings its own IP reputation and PTR, and DKIM-signs as `mail.naratech.xyz` so mail still comes from `klara@mail.naratech.xyz` rather than a third-party identity.
+
+**Authentication records** (all in the `mail.naratech.xyz` Route53 zone — note the apex `naratech.xyz` is hosted at the registrar, not Route53, so records can only be published on the subdomain):
+
+| Record | Value | Purpose |
+|---|---|---|
+| 3× `<token>._domainkey` CNAME | `<token>.dkim.amazonses.com` | SES Easy DKIM signing keys |
+| `mail.naratech.xyz` TXT | `v=spf1 a mx include:amazonses.com ~all` | Authorises the instance and SES to send |
+| `_dmarc.mail.naratech.xyz` TXT | `v=DMARC1; p=none; rua=...; fo=1` | Monitor-only policy + aggregate reports |
+
+DMARC passes here on **DKIM alignment**, not SPF: without a custom MAIL FROM domain the SPF check authenticates `amazonses.com`, which doesn't align with the From domain. DKIM signs as `mail.naratech.xyz`, which does. `p=none` is deliberate — tighten to `quarantine`/`reject` only after the aggregate reports confirm legitimate mail is passing, since starting at `p=reject` is how you silently lose real mail.
+
+**⚠️ SES is in the sandbox** (`ProductionAccess: false`, 200 msg/day, 1 msg/sec). Mail is delivered **only to verified recipient addresses**. `ses_sandbox_verified_recipients` in `infra/envs/dev/variables.tf` verifies them; **AWS emails each address a confirmation link that its owner must click** before delivery works. To send to arbitrary recipients, request production access in the SES console — then empty that list.
+
+Verify the whole outbound path after applying:
+```bash
+# 1. DNS published and propagated
+dig +short TXT mail.naratech.xyz
+dig +short TXT _dmarc.mail.naratech.xyz
+aws sesv2 get-email-identity --email-identity mail.naratech.xyz \
+  --profile lab-user --region us-east-1 \
+  --query "{Verified:VerifiedForSendingStatus,DkimStatus:DkimAttributes.Status}"
+
+# 2. Postfix is relaying, credentials loaded (on the instance)
+postconf relayhost smtp_sasl_auth_enable smtp_tls_security_level
+sudo ls -l /etc/postfix/sasl_passwd.db     # must exist
+
+# 3. Send, then watch for a 250 from SES rather than a timeout
+swaks --to <a-verified-address> --from klara@mail.naratech.xyz --server 127.0.0.1
+sudo grep 'email-smtp' /var/log/maillog | tail -5
+```
+Delivered mail should show `dkim=pass` and `spf=pass` in the recipient's "Show original" / Authentication-Results header. `554 Message rejected: Email address is not verified` means the recipient isn't in the verified list and SES is still sandboxed.
+
+The SES IAM policy is deliberately constrained to `ses:FromAddress` matching `*@mail.naratech.xyz`, so a leaked SMTP credential can't be used to send as an arbitrary domain. The trade-off: **relaying outbound mail whose From address is not in our domain will be denied**, which rules out plain forwarding of external mail back out. Sending as our own users — the actual use case — is unaffected. An `AccessDenied` on send with a non-local From address is this condition working, not a misconfiguration.
+
+### Relay troubleshooting
+
+**`SASL authentication failed ... no mechanism available`** — Postfix's *client*-side SASL needs the Cyrus PLAIN plugin, which the base Rocky install doesn't include. It's in the `dnf install` list now; if you hit it on a hand-built host:
+```bash
+sudo dnf install -y cyrus-sasl-plain && sudo systemctl restart postfix
+```
+Note this is the client side, entirely separate from the Dovecot SASL socket that the submission service uses for inbound authentication — having 587 working does not mean outbound SASL will.
+
+**`554 Access denied: User ... not authorized to perform ses:SendRawEmail on resource ...identity/<recipient>`** — while SES is sandboxed it authorises against the **recipient** identity as well as the sender's, so an IAM policy scoped only to the sending domain's identity ARN fails on every send. The policy uses `identity/*` within the account for this reason, with `ses:FromAddress` carrying the actual restriction.
+
+**Checking verification status:** `aws sesv2 list-email-identities` does *not* populate `VerifiedForSendingStatus` — it returns `None` for every identity even when they are verified, which looks alarming and isn't. Query each address individually:
+```bash
+aws sesv2 get-email-identity --email-identity <addr> \
+  --profile lab-user --region us-east-1 --query VerifiedForSendingStatus
+```
+
+**Verified working** (2026-07-25), both accepted by SES with a `250 Ok` queue ID:
+
+| To | Result |
+|---|---|
+| `snsknarayana@gmail.com` | `status=sent (250 Ok 0100019f977fc7a8-...)` |
+| `sknnarayana-mudiyans@myseneca.ca` | `status=sent (250 Ok 0100019f97817520-...)` |
+
+Confirm on the receiving end via "Show original" / "View message source" that `Authentication-Results` reports `dkim=pass` for `mail.naratech.xyz`. Institutional tenants (Seneca's Microsoft 365) filter aggressively — check Junk before concluding a send failed.
 
 ## 6. Troubleshooting
 
@@ -120,6 +230,24 @@ ls -l /etc/dovecot/sieve/quarantine.sieve*   # look for the compiled .svbin
 ```
 
 If a message never gets the `X-Phishing-Verdict` header at all, check `/var/log/maillog` for `phishing_filter: API call failed, failing open` — this means the API call itself failed (network path, auth token, or the API being cold/down), and the filter correctly delivered the message unmodified rather than blocking it.
+
+**`timed out` on the first message after an API deploy is expected.** The API lazy-loads both models from S3 on the first request, which takes ~20–40s; warm requests are ~0.3s. The filter's `TIMEOUT` is 45s to absorb this, but if a deploy is in progress the very first message can still fail open. Send a second message and it will be scored. To warm the API deliberately before testing:
+```bash
+TOKEN=$(sudo cat /etc/esp/api-token)
+time curl -s -X POST -H "Authorization: Bearer $TOKEN" \
+  -F source=server -F 'file=@/dev/stdin;filename=msg.eml;type=message/rfc822' \
+  http://<internal-alb-dns>/analyze/email <<< $'From: a@b.com\r\nSubject: warm\r\n\r\nhello'
+```
+
+**Mail accepted but the IMAP inbox stays empty.** Confirm Postfix is handing off to Dovecot over LMTP rather than delivering with its own `local` transport:
+```bash
+postconf mailbox_transport        # must be lmtp:unix:private/dovecot-lmtp
+ls -l /var/spool/postfix/private/dovecot-lmtp   # socket must exist
+ls -l /var/spool/mail/            # non-empty files here mean local/mbox delivery happened instead
+```
+`local` writes mbox to `/var/spool/mail/$user`, which Dovecot (`mail_location = maildir:~/Maildir`) cannot see — mail is received and scored but invisible over IMAP. Sieve also only runs under LMTP, so quarantine routing silently stops too. Note that a drop-in under `/etc/postfix/main.cf.d/` will *not* fix this: Rocky 9's `main.cf` has no `include` for that directory, so such files are silently ignored — settings must go through `postconf`.
+
+**LMTP bounces with `User doesn't exist: klara@mail.naratech.xyz`.** Dovecot authenticates against PAM/system users, which are bare names (`klara`), but LMTP passes the full address. `auth_username_format = %Ln` in `/etc/dovecot/conf.d/93-esp-lmtp.conf` strips the domain.
 
 ## 7. For M7-T8 (integration report)
 

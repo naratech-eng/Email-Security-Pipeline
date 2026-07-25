@@ -184,6 +184,19 @@ module "mail_server" {
   mail_zone_id               = var.mail_zone_id
   jwt_signing_key_secret_arn = module.secrets.jwt_signing_key_arn
   api_internal_url           = module.alb.internal_alb_dns
+  ses_smtp_secret_arn        = module.ses_relay.smtp_credentials_secret_arn
+  ses_relay_host             = module.ses_relay.relay_host
+}
+
+# --------------------------------------------------------------------------- #
+# SES outbound relay + SPF/DKIM/DMARC (M7-T6)
+# --------------------------------------------------------------------------- #
+module "ses_relay" {
+  source                      = "../../modules/ses_relay"
+  project                     = var.project
+  mail_hostname               = var.mail_hostname
+  mail_zone_id                = var.mail_zone_id
+  sandbox_verified_recipients = var.ses_sandbox_verified_recipients
 }
 
 # --------------------------------------------------------------------------- #

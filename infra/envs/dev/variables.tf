@@ -59,6 +59,25 @@ variable "mail_hostname" {
 }
 
 # --------------------------------------------------------------------------- #
+# SES outbound relay (M7-T6)
+# --------------------------------------------------------------------------- #
+# While the SES account is in the sandbox, outbound mail is delivered only to
+# verified addresses. Each entry here triggers a confirmation email from AWS
+# that the address owner must click before mail to it will be delivered. Empty
+# this list once SES production access is granted.
+variable "ses_sandbox_verified_recipients" {
+  type = list(string)
+  default = [
+    "snsknarayana@gmail.com",
+    "icampbell8@myseneca.ca",           # Isaiah — Project Lead
+    "khaxhiaj@myseneca.ca",             # Klara — Research & Data
+    "sknnarayana-mudiyans@myseneca.ca", # Sanjeewa — Infrastructure
+    "jgkalluri@myseneca.ca",            # John Graham — Frontend & Security
+    "mchea3@myseneca.ca",               # Michael Chea — ML Engineer
+  ]
+}
+
+# --------------------------------------------------------------------------- #
 # Cognito — Amplify frontend at esp.naratech.xyz
 # --------------------------------------------------------------------------- #
 variable "cognito_callback_urls" {

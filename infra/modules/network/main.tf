@@ -264,15 +264,20 @@ resource "aws_security_group" "alb_internal" {
   #checkov:skip=CKV_AWS_382: Open egress needed for internal ALB→ECS in lab
   #checkov:skip=CKV2_AWS_5: SG attached to the internal ALB via var ref in the alb module (cross-module, untraceable by Checkov)
   name        = "${var.project}-sg-alb-internal"
-  description = "Internal ALB: allow HTTPS from VPC"
+  description = "Internal ALB: allow HTTP from VPC (listener is HTTP on 80 — see aws_lb_listener.internal_http, TLS terminated at the public ALB only)"
   vpc_id      = aws_vpc.main.id
 
+  # M7-T6 fix — this was 443 (HTTPS), but the internal listener actually
+  # runs HTTP on port 80 (aws_lb_listener.internal_http). Every real
+  # connection attempt (mail server content_filter -> internal ALB) was
+  # silently timing out because of this mismatch; nothing had exercised
+  # this path end-to-end before the mail server did.
   ingress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
-    description = "HTTPS from VPC"
+    description = "HTTP from VPC"
   }
 
   egress {
