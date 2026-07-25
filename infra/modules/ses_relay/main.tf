@@ -64,10 +64,15 @@ resource "aws_iam_user" "ses_smtp" {
 
 data "aws_caller_identity" "current" {}
 
-# Scoped to this one verified identity, and further constrained so the key can
-# only send From: addresses in our own domain — a leaked SMTP credential then
-# cannot be used to send as anyone else, which is the whole risk of handing
-# long-lived credentials to a mail server.
+# Resource covers every identity in this account rather than just the sending
+# domain, because while SES is in the sandbox it authorises against the
+# *recipient* identity as well — scoping this to identity/${var.mail_hostname}
+# fails with "not authorized ... on resource identity/<recipient>".
+#
+# The real protection is the ses:FromAddress condition, not the resource ARN:
+# it means a leaked SMTP credential can only send *as* our own domain, which is
+# the actual risk of putting long-lived credentials on a mail server. Sending
+# to arbitrary recipients is the intended behaviour.
 resource "aws_iam_user_policy" "ses_send" {
   name = "ses-send-only"
   user = aws_iam_user.ses_smtp.name
@@ -77,7 +82,7 @@ resource "aws_iam_user_policy" "ses_send" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["ses:SendRawEmail"]
-      Resource = "arn:aws:ses:${var.ses_region}:${data.aws_caller_identity.current.account_id}:identity/${var.mail_hostname}"
+      Resource = "arn:aws:ses:${var.ses_region}:${data.aws_caller_identity.current.account_id}:identity/*"
       Condition = {
         StringLike = {
           "ses:FromAddress" = "*@${var.mail_hostname}"

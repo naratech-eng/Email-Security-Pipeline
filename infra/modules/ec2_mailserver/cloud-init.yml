@@ -173,8 +173,10 @@ runcmd:
   - systemctl enable --now amazon-ssm-agent || true
   - dnf install -y ec2-instance-connect || true
 
-  # dovecot-pigeonhole = Sieve (M7-T5); unzip = for the AWS CLI installer
-  - dnf install -y postfix dovecot dovecot-pigeonhole swaks s-nail unzip
+  # dovecot-pigeonhole = Sieve (M7-T5); unzip = for the AWS CLI installer;
+  # cyrus-sasl-plain = SASL PLAIN for the *client* side, required to authenticate
+  # to the SES relay — without it Postfix reports "no mechanism available".
+  - dnf install -y postfix dovecot dovecot-pigeonhole swaks s-nail unzip cyrus-sasl-plain
 
   - postconf -e "myhostname = ${mail_hostname}"
   - postconf -e "mydomain = ${mail_domain}"

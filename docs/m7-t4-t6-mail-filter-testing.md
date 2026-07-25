@@ -172,6 +172,31 @@ Delivered mail should show `dkim=pass` and `spf=pass` in the recipient's "Show o
 
 The SES IAM policy is deliberately constrained to `ses:FromAddress` matching `*@mail.naratech.xyz`, so a leaked SMTP credential can't be used to send as an arbitrary domain. The trade-off: **relaying outbound mail whose From address is not in our domain will be denied**, which rules out plain forwarding of external mail back out. Sending as our own users — the actual use case — is unaffected. An `AccessDenied` on send with a non-local From address is this condition working, not a misconfiguration.
 
+### Relay troubleshooting
+
+**`SASL authentication failed ... no mechanism available`** — Postfix's *client*-side SASL needs the Cyrus PLAIN plugin, which the base Rocky install doesn't include. It's in the `dnf install` list now; if you hit it on a hand-built host:
+```bash
+sudo dnf install -y cyrus-sasl-plain && sudo systemctl restart postfix
+```
+Note this is the client side, entirely separate from the Dovecot SASL socket that the submission service uses for inbound authentication — having 587 working does not mean outbound SASL will.
+
+**`554 Access denied: User ... not authorized to perform ses:SendRawEmail on resource ...identity/<recipient>`** — while SES is sandboxed it authorises against the **recipient** identity as well as the sender's, so an IAM policy scoped only to the sending domain's identity ARN fails on every send. The policy uses `identity/*` within the account for this reason, with `ses:FromAddress` carrying the actual restriction.
+
+**Checking verification status:** `aws sesv2 list-email-identities` does *not* populate `VerifiedForSendingStatus` — it returns `None` for every identity even when they are verified, which looks alarming and isn't. Query each address individually:
+```bash
+aws sesv2 get-email-identity --email-identity <addr> \
+  --profile lab-user --region us-east-1 --query VerifiedForSendingStatus
+```
+
+**Verified working** (2026-07-25), both accepted by SES with a `250 Ok` queue ID:
+
+| To | Result |
+|---|---|
+| `snsknarayana@gmail.com` | `status=sent (250 Ok 0100019f977fc7a8-...)` |
+| `sknnarayana-mudiyans@myseneca.ca` | `status=sent (250 Ok 0100019f97817520-...)` |
+
+Confirm on the receiving end via "Show original" / "View message source" that `Authentication-Results` reports `dkim=pass` for `mail.naratech.xyz`. Institutional tenants (Seneca's Microsoft 365) filter aggressively — check Junk before concluding a send failed.
+
 ## 6. Troubleshooting
 
 **Getting a shell on the instance:** the official Rocky Linux AMI doesn't ship SSM Agent or EC2 Instance Connect pre-installed (unlike Amazon Linux) — both are now installed explicitly in `cloud-init.yml`, so:
