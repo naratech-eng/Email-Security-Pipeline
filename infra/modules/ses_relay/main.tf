@@ -73,9 +73,22 @@ data "aws_caller_identity" "current" {}
 # it means a leaked SMTP credential can only send *as* our own domain, which is
 # the actual risk of putting long-lived credentials on a mail server. Sending
 # to arbitrary recipients is the intended behaviour.
-resource "aws_iam_user_policy" "ses_send" {
-  name = "ses-send-only"
-  user = aws_iam_user.ses_smtp.name
+# Attached via a group rather than inline on the user: an inline user policy
+# trips CKV_AWS_40, and the group is where the permission belongs anyway if a
+# second sender is ever added.
+resource "aws_iam_group" "ses_smtp" {
+  name = "${var.project}-ses-smtp"
+}
+
+resource "aws_iam_group_membership" "ses_smtp" {
+  name  = "${var.project}-ses-smtp"
+  group = aws_iam_group.ses_smtp.name
+  users = [aws_iam_user.ses_smtp.name]
+}
+
+resource "aws_iam_group_policy" "ses_send" {
+  name  = "ses-send-only"
+  group = aws_iam_group.ses_smtp.name
 
   policy = jsonencode({
     Version = "2012-10-17"
