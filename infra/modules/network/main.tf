@@ -375,6 +375,17 @@ resource "aws_security_group" "mail" {
     description = "IMAPS inbound"
   }
 
+  # M7-T6 — authenticated SMTP submission, so email clients can send mail
+  # through this server (not just receive it). SASL-authenticated only —
+  # see the submission service in cloud-init.yml's master.cf block.
+  ingress {
+    from_port   = 587
+    to_port     = 587
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SMTP submission (authenticated)"
+  }
+
   ingress {
     from_port   = 22
     to_port     = 22

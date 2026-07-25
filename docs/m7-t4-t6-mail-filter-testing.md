@@ -68,19 +68,35 @@ Benign mail → `~/Maildir/new/`. Anything tagged `X-Phishing-Verdict: quarantin
 
 ## 5. External path — real client, real Gmail
 
-**Send:** from Gmail (or any external account) to `klara@mail.naratech.xyz` (etc). Requires the MX record for `mail.naratech.xyz` to have propagated (`dig MX mail.naratech.xyz` — should return `10 mail.naratech.xyz`) and DNS TTL (300s) to have expired since the last apply.
+**Send (Gmail → us):** from Gmail (or any external account) to `klara@mail.naratech.xyz` (etc). Requires the MX record for `mail.naratech.xyz` to have propagated (`dig MX mail.naratech.xyz` — should return `10 mail.naratech.xyz`) and DNS TTL (300s) to have expired since the last apply.
 
-**Read:** configure an email client (Thunderbird, Outlook, Mail app) with:
+**Read (IMAP):** configure an email client (Thunderbird, Outlook, Mail app) with:
 - **IMAP host:** `mail.naratech.xyz`
-- **Port:** `143` (STARTTLS) or `993` (IMAPS — self-signed cert, client will warn once, accept it)
+- **Port:** `143` with **STARTTLS** — verified working (real TLS 1.3 handshake). **Port 993 (IMAPS/implicit TLS) does not currently work** — Dovecot's default install doesn't enable that listener even though the port is open at the security-group level; use 143+STARTTLS instead until this is fixed.
+- Client will warn about the self-signed cert — accept/add the exception, expected for a dev cert.
 - **Username:** just `klara` (not the full address)
 - **Password:** as in §3
 
 Look at message headers in the client (usually "View Source" / "Show Original") for `X-Phishing-Verdict` and `X-Phishing-Score`, and check whether the message landed in INBOX vs. a `Quarantine` folder (should appear automatically via IMAP once Sieve first files something into it).
 
-**Sending back out:** if replying from the mail server to a real external address doesn't seem to go through, check whether AWS's default outbound-port-25 block has been lifted for this account (EC2 console → request removal of email sending limitations) — this is an AWS account-level restriction outside Terraform's control and doesn't affect *receiving*.
+**Send (client → someone else, e.g. klara → testuser1):** configure SMTP submission on the same account:
+- **SMTP host:** `mail.naratech.xyz`
+- **Port:** `587`, **Connection security: STARTTLS**, **Authentication: Normal password (SASL)**
+- **Username/password:** same as IMAP (`klara` / `Klara2026!`, etc.)
+- This is authenticated-only — an unauthenticated client can't relay through this server. Port 25 stays receive-only for inbound MX traffic; it's not a relay.
+
+**Sending to a real external address (e.g. back to Gmail):** if that doesn't go through, check whether AWS's default outbound-port-25 block has been lifted for this account (EC2 console → request removal of email sending limitations) — an AWS account-level restriction outside Terraform's control, unrelated to the submission service above (which only handles the client → server hop; server → external internet still goes out over port 25).
 
 ## 6. Troubleshooting
+
+**Getting a shell on the instance:** the official Rocky Linux AMI doesn't ship SSM Agent or EC2 Instance Connect pre-installed (unlike Amazon Linux) — both are now installed explicitly in `cloud-init.yml`, so:
+```bash
+aws ssm start-session --target <instance-id> --profile lab-user --region us-east-1
+```
+If that still doesn't connect, `ec2-instance-connect` is the fallback:
+```bash
+aws ec2-instance-connect ssh --instance-id <instance-id> --profile lab-user --region us-east-1
+```
 
 ```bash
 # service status
