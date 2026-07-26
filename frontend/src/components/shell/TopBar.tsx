@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
@@ -17,7 +18,9 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useTheme } from '@/hooks/useTheme';
+import { useDetectionsFeed } from '@/feed/DetectionsFeedProvider';
 import { envLabel } from '@/lib/env';
+import { formatRelative } from '@/lib/format';
 
 interface TopBarProps {
   onToggleSidebar: () => void;
@@ -27,8 +30,20 @@ interface TopBarProps {
 export function TopBar({ onToggleSidebar, onOpenMobileNav }: TopBarProps) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { quarantineUnread, acknowledgeQuarantine } = useDetectionsFeed();
   const [query, setQuery] = useState('');
   const env = envLabel();
+  const unreadCount = quarantineUnread.length;
+
+  /**
+   * The acknowledgement gesture (RB-3): go to the quarantine view and clear the
+   * mark, in that order. Only this action advances the mark — merely opening the
+   * bell, or a poll landing, must not, or the count stops meaning anything.
+   */
+  function onViewQuarantine() {
+    navigate('/detections?verdict=quarantine');
+    acknowledgeQuarantine();
+  }
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -79,16 +94,62 @@ export function TopBar({ onToggleSidebar, onOpenMobileNav }: TopBarProps) {
       <div className="ml-auto flex items-center gap-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Quarantine alerts">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              aria-label={
+                unreadCount === 0
+                  ? 'Quarantine alerts — none unacknowledged in the current feed window'
+                  : `Quarantine alerts — ${unreadCount} unacknowledged in the current feed window`
+              }
+            >
               <Bell />
+              {unreadCount > 0 && (
+                <span
+                  className="absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-verdict-quarantine px-1 font-mono text-[10px] font-semibold leading-4 text-background"
+                  aria-hidden
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
-            <DropdownMenuLabel>Recent quarantine arrivals</DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuLabel>Unacknowledged quarantine</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <div className="px-2 py-6 text-center text-sm text-muted-foreground">
-              No new quarantine arrivals.
-            </div>
+            {unreadCount === 0 ? (
+              <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                No unacknowledged quarantine arrivals.
+              </div>
+            ) : (
+              quarantineUnread.slice(0, 5).map((row) => (
+                <DropdownMenuItem
+                  key={row.id}
+                  onSelect={() => navigate(`/detections/${row.id}`)}
+                  className="flex-col items-start gap-0.5"
+                >
+                  <span className="w-full truncate text-sm">
+                    {row.subject || '(no subject)'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatRelative(row.created_at)}
+                  </span>
+                </DropdownMenuItem>
+              ))
+            )}
+            <DropdownMenuSeparator />
+            {unreadCount > 0 && (
+              <DropdownMenuItem onSelect={onViewQuarantine}>
+                View all quarantine &amp; mark seen
+              </DropdownMenuItem>
+            )}
+            {/* The count can only ever describe the rows the feed currently
+                holds — say so rather than implying full coverage. */}
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              Counts unacknowledged quarantine in the current feed window, not all
+              time.
+            </p>
           </DropdownMenuContent>
         </DropdownMenu>
 

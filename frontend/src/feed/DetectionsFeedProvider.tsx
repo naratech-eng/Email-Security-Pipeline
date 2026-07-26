@@ -9,7 +9,9 @@ import {
   type ReactNode,
 } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthProvider';
 import { ApiError, isAbortError, listDetections } from '@/lib/api';
+import { readQuarantineAck, writeQuarantineAck } from '@/lib/quarantineAck';
 import {
   DEFAULT_LIMIT,
   useDetectionsQuery,
@@ -56,6 +58,14 @@ interface FeedContextValue {
   isInitialLoading: boolean;
   /** Ids in `live` newer than anything rendered before — drives the highlight. */
   arrivals: number[];
+  /**
+   * Quarantine rows in the live window above the analyst's acknowledgement mark
+   * — the bell's contents. Window-scoped by construction: quarantine outside the
+   * current poll's window is not counted, so the affordance must say so.
+   */
+  quarantineUnread: DetectionRecord[];
+  /** The explicit acknowledgement gesture: clears the bell up to the newest row. */
+  acknowledgeQuarantine: () => void;
   isPaused: boolean;
   setPaused: (paused: boolean) => void;
   refreshNow: () => void;
@@ -78,6 +88,8 @@ function highestId(rows: DetectionRecord[]): number {
 export function DetectionsFeedProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const { server } = useDetectionsQuery();
+  const { user } = useAuth();
+  const sub = user?.sub;
 
   // Filters belong to the Detections route. Elsewhere the chrome still needs a
   // feed, so poll the default unfiltered window rather than inheriting whatever
@@ -195,17 +207,41 @@ export function DetectionsFeedProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => liveAbortRef.current?.abort(), []);
 
+  // Quarantine acknowledgement: a persisted per-user high-water id. Held in
+  // state as well as storage so the bell updates the moment it's cleared.
+  const [ackedQuarantineId, setAckedQuarantineId] = useState(() => readQuarantineAck(sub));
+  useEffect(() => setAckedQuarantineId(readQuarantineAck(sub)), [sub]);
+
+  const quarantineUnread = useMemo(
+    () =>
+      live.rows.filter(
+        (row) => row.verdict === 'quarantine' && row.id > ackedQuarantineId,
+      ),
+    [ackedQuarantineId, live.rows],
+  );
+
+  const acknowledgeQuarantine = useCallback(() => {
+    const newest = live.rows.reduce(
+      (max, row) => (row.verdict === 'quarantine' ? Math.max(max, row.id) : max),
+      0,
+    );
+    if (newest === 0) return;
+    setAckedQuarantineId(writeQuarantineAck(sub, newest));
+  }, [live.rows, sub]);
+
   const value = useMemo<FeedContextValue>(
     () => ({
       live,
       page,
       isInitialLoading: live.fetchedAt === null && live.error === null,
       arrivals,
+      quarantineUnread,
+      acknowledgeQuarantine,
       isPaused,
       setPaused,
       refreshNow: () => setTick((t) => t + 1),
     }),
-    [arrivals, isPaused, live, page],
+    [acknowledgeQuarantine, arrivals, isPaused, live, page, quarantineUnread],
   );
 
   return <FeedContext.Provider value={value}>{children}</FeedContext.Provider>;

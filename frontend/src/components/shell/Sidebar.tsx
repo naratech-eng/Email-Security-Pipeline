@@ -11,6 +11,7 @@ import { UserAvatar } from '@/components/user/UserAvatar';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { useAuth } from '@/auth/AuthProvider';
 import { usePermissions } from '@/auth/usePermissions';
+import { useDetectionsFeed } from '@/feed/DetectionsFeedProvider';
 import { NAV_ITEMS } from './nav';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -28,6 +29,7 @@ interface SidebarContentProps {
 export function SidebarContent({ collapsed = false, onNavigate }: SidebarContentProps) {
   const { user, signOut } = useAuth();
   const perms = usePermissions();
+  const { arrivals } = useDetectionsFeed();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const visibleNav = NAV_ITEMS.filter((item) => {
@@ -80,6 +82,19 @@ export function SidebarContent({ collapsed = false, onNavigate }: SidebarContent
             >
               <Icon className="size-5 shrink-0" aria-hidden />
               {!collapsed && <span>{label}</span>}
+              {/* Live arrivals on the feed item — the same poll snapshot the
+                  Detections table renders, so the two can't disagree. */}
+              {to === '/detections' && arrivals.length > 0 && (
+                <span
+                  className={cn(
+                    'rounded-full bg-primary/20 px-1.5 font-mono text-[10px] font-semibold leading-4 text-primary',
+                    collapsed ? 'absolute right-1 top-1' : 'ml-auto',
+                  )}
+                  aria-label={`${arrivals.length} new since your last look`}
+                >
+                  {arrivals.length > 9 ? '9+' : arrivals.length}
+                </span>
+              )}
             </NavLink>
           );
           return collapsed ? (
