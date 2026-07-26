@@ -12,3 +12,13 @@ output "dkim_tokens" {
   description = "SES DKIM selectors, for confirming the published CNAMEs match"
   value       = aws_sesv2_email_identity.mail_domain.dkim_signing_attributes[0].tokens
 }
+
+output "identity_arn" {
+  description = "ARN of the verified mail-domain SES identity — used as Cognito's email source_arn."
+  value       = aws_sesv2_email_identity.mail_domain.arn
+}
+
+output "identity_name" {
+  description = "The verified SES domain identity (e.g. mail.naratech.xyz)."
+  value       = aws_sesv2_email_identity.mail_domain.email_identity
+}

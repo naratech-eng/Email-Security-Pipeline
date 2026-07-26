@@ -22,6 +22,18 @@ resource "aws_cognito_user_pool" "main" {
     }
   }
 
+  # Send verification/reset emails through SES when a source identity is given
+  # (branded from-address, real deliverability). Omitted => COGNITO_DEFAULT.
+  # In-place update on the existing pool (no replacement).
+  dynamic "email_configuration" {
+    for_each = var.ses_source_arn != "" ? [1] : []
+    content {
+      email_sending_account = "DEVELOPER"
+      source_arn            = var.ses_source_arn
+      from_email_address    = var.ses_from_email
+    }
+  }
+
   # Custom attributes the dashboard sets at sign-up / in settings. Adding new
   # schema blocks like these applied in place against the existing pool with
   # this provider version (verified live: pool id and CreationDate unchanged
