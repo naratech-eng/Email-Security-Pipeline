@@ -18,14 +18,38 @@ import math
 import os
 from typing import Optional
 
+import boto3
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import db
+from cognito_auth import cognito_configured, get_config, verify_access_token, TokenError
 from inference import predict_email, predict_url
 from mime_parser import MimeEmail, body_features, normalize_text
 
 app = FastAPI(title="Email Security Pipeline — Inference API")
+
+# --------------------------------------------------------------------------- #
+# CORS — the dashboard SPA calls this API from the browser (localhost in dev,
+# the Amplify domains in prod). Without these headers the browser blocks every
+# cross-origin call. Origins come from CORS_ALLOWED_ORIGINS (comma-separated).
+# --------------------------------------------------------------------------- #
+_CORS_ORIGINS = [
+    o.strip()
+    for o in os.environ.get(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000',
+    ).split(',')
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 MAX_EMAIL_BYTES = 2 * 1024 * 1024  # 2MB — generous for an email, bounds abuse/latency
 
@@ -73,13 +97,58 @@ def _url_likelihood(score: float) -> float:
 # must send it as a bearer token so the API isn't silently unauthenticated
 # on the public ALB. See docs/m7-t1-fastapi-service.md #4.
 # ---------------------------------------------------------------------------
-def require_auth(request: Request) -> None:
-    signing_key = os.environ.get('JWT_SIGNING_KEY')
-    if not signing_key:
-        return
+def _bearer_token(request: Request) -> str:
     auth = request.headers.get('authorization', '')
-    if auth != f'Bearer {signing_key}':
-        raise HTTPException(status_code=401, detail='Unauthorized')
+    return auth[7:].strip() if auth[:7].lower() == 'bearer ' else ''
+
+
+def require_auth(request: Request) -> dict:
+    """
+    Accepts EITHER:
+      - the static JWT_SIGNING_KEY (internal mail content-filter -> API), or
+      - a valid Cognito access token (dashboard users).
+    Returns a principal descriptor. Local dev with neither configured stays open.
+    """
+    token = _bearer_token(request)
+    signing_key = os.environ.get('JWT_SIGNING_KEY')
+
+    # Internal service caller (mail filter).
+    if signing_key and token and token == signing_key:
+        return {'principal': 'service'}
+
+    # Dashboard user via Cognito.
+    if cognito_configured():
+        if not token:
+            raise HTTPException(status_code=401, detail='Unauthorized')
+        try:
+            claims = verify_access_token(token)
+        except TokenError as e:
+            raise HTTPException(status_code=401, detail=str(e))
+        return {'principal': 'user', 'claims': claims}
+
+    # Neither the static key nor Cognito configured => local dev, stay open.
+    if not signing_key:
+        return {'principal': 'anonymous'}
+
+    raise HTTPException(status_code=401, detail='Unauthorized')
+
+
+def require_cognito_user(auth: dict = Depends(require_auth)) -> dict:
+    """Require a signed-in dashboard user (not the internal service key)."""
+    if auth.get('principal') != 'user':
+        raise HTTPException(
+            status_code=403,
+            detail='This action requires a signed-in dashboard user.',
+        )
+    return auth['claims']
+
+
+# custom:role value -> Cognito group name.
+_ROLE_TO_GROUP = {
+    'soc-analyst': 'soc-analyst',
+    'security-operator': 'security-operator',
+    'security-analyst': 'security-analyst',
+}
 
 
 class EmailPredictRequest(BaseModel):
@@ -369,3 +438,50 @@ def list_detections_route(
     if verdict is not None and verdict not in ('clean', 'flag', 'quarantine'):
         raise HTTPException(status_code=400, detail='verdict must be "clean", "flag", or "quarantine".')
     return db.list_detections(source=source, verdict=verdict, limit=limit, offset=offset)
+
+
+class ClaimRoleResponse(BaseModel):
+    status: str  # "claimed" | "already_assigned"
+    group: Optional[str] = None
+    groups: list[str] = []
+
+
+@app.post('/users/claim-role', response_model=ClaimRoleResponse)
+def claim_role(claims: dict = Depends(require_cognito_user)):
+    """
+    M7-T14: assign the caller's Cognito group from their verified custom:role,
+    once, if they don't already have one. Called by the frontend right after a
+    fresh user's first sign-in (the pending-role screen).
+    """
+    pool, region, _ = get_config()
+    if not pool:
+        raise HTTPException(status_code=503, detail='Cognito is not configured.')
+
+    username = claims.get('username') or claims.get('cognito:username')
+    if not username:
+        raise HTTPException(status_code=400, detail='Token is missing a username.')
+
+    existing = claims.get('cognito:groups') or []
+    if existing:
+        return ClaimRoleResponse(status='already_assigned', groups=list(existing))
+
+    idp = boto3.client('cognito-idp', region_name=region)
+    try:
+        user = idp.admin_get_user(UserPoolId=pool, Username=username)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f'Could not read user profile: {e}')
+
+    attrs = {a['Name']: a['Value'] for a in user.get('UserAttributes', [])}
+    group = _ROLE_TO_GROUP.get(attrs.get('custom:role') or '')
+    if not group:
+        raise HTTPException(
+            status_code=400,
+            detail='No valid role on your profile to claim.',
+        )
+
+    try:
+        idp.admin_add_user_to_group(UserPoolId=pool, Username=username, GroupName=group)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f'Could not assign group: {e}')
+
+    return ClaimRoleResponse(status='claimed', group=group)
