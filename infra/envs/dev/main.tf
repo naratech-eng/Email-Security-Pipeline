@@ -177,6 +177,17 @@ module "ecs" {
   cognito_user_pool_arn = module.cognito.user_pool_arn
   cognito_app_client_id = module.cognito.client_id
 
+  # Real browser origins for both dev and prod: the custom domains AND the
+  # Amplify default domains (the latter are live before custom-domain DNS
+  # resolves), plus localhost for `npm run dev`.
+  cors_allowed_origins = [
+    "http://localhost:3000",
+    "https://esp-dev.naratech.xyz", # dev custom domain
+    "https://esp.naratech.xyz",     # prod custom domain
+    module.amplify.dev_branch_url,  # https://dev.<id>.amplifyapp.com
+    module.amplify.prod_branch_url, # https://naratech.<id>.amplifyapp.com
+  ]
+
   # Target groups aren't usable by an ECS service until a listener has
   # attached them to a load balancer. The TG ARN alone (public_tg_arn /
   # internal_tg_arn above) doesn't carry that dependency, so without this,
