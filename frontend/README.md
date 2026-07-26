@@ -1,0 +1,84 @@
+# Email Security Pipeline — Analyst Dashboard
+
+Production React SPA (the analyst-facing view of the CYT300 phishing-detection pipeline).
+Built with Vite + TypeScript (strict), Tailwind CSS v4, shadcn/ui, react-router, AWS Amplify
+(Cognito auth), Recharts, lucide-react, and Framer Motion.
+
+> Being built in slices. **Slice 1 (this)** = project scaffold, the fixed cyber-SOC design
+> system, and the app shell. Auth, detections, analyze, overview, and users land in later slices.
+
+## Local setup
+
+Requires Node 24+ (developed on Node 26).
+
+```bash
+cd frontend
+npm ci                       # or: npm install (first time)
+cp .env.example .env.local   # then fill in the values (see below)
+npm run dev                  # http://localhost:3000
+```
+
+The dev server runs on **port 3000** because the Cognito app client's callback URL is
+`http://localhost:3000/callback`.
+
+### Environment variables
+
+All config comes from `import.meta.env` — nothing is hardcoded. Copy `.env.example` to
+`.env.local` (gitignored) and fill in:
+
+| Variable | Meaning | Where to get it |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | FastAPI inference service base URL | dev: `https://esp-api.naratech.xyz` |
+| `VITE_COGNITO_USER_POOL_ID` | Cognito user pool id | `terraform output cognito_pool_id` (`infra/envs/dev`) |
+| `VITE_COGNITO_CLIENT_ID` | Cognito app client id | `terraform output cognito_client_id` (`infra/envs/dev`) |
+| `VITE_COGNITO_REGION` | AWS region of the pool | e.g. `us-east-1` |
+| `VITE_APP_ENV` | Top-bar env badge label | `DEV` or `PROD` |
+
+The shell (slice 1) only needs `VITE_APP_ENV`; the Cognito/API vars are validated lazily when
+the auth and data slices use them, so you can preview the shell before wiring the full env.
+
+## Build
+
+```bash
+npm run build     # tsc -b && vite build → dist/  (zero TS errors)
+npm audit         # must report 0 vulnerabilities
+npm run preview   # serve the production build locally
+```
+
+### react-router advisory note
+
+The T10 spec asked to pin `react-router-dom` at `7.11.0` (it believed 7.12+ introduced
+GHSA-qwww-vcr4-c8h2). As of this build the advisory database has moved and there is **no
+audit-clean react-router version**:
+
+- `7.11.0` → **14** high advisories affecting `6.0.0–7.17.0`, several client-relevant (XSS via
+  open redirect, DoS via route matching, open redirect via backslash in `<Link>`) — all **fixed
+  in 7.18.1**.
+- `7.18.1` (latest, what we ship) → **1** high advisory, `GHSA-qwww-vcr4-c8h2` (RSC-mode CSRF).
+
+We ship **`^7.18.1`** because it fixes the 14 client-relevant issues. The single residual advisory
+concerns **React Server Components (RSC) mode**, which this SPA does not use — it routes with
+client-side `createBrowserRouter`, so `GHSA-qwww-vcr4-c8h2` is **not exploitable here**. This is an
+accepted, documented exception; re-evaluate when a fully patched react-router release lands.
+
+## Design system
+
+The fixed cyber-SOC palette lives in `src/styles/theme.css` as CSS variables (dark is the
+default; `[data-theme="light"]` overrides), mapped into Tailwind v4 utilities via `@theme`.
+**Never hardcode hex in components** — reference the tokens (`bg-surface`, `text-verdict-quarantine`,
+`text-primary`, …). Cyan glow (`.glow-live`) is reserved for the live indicator and the scanning
+animation only. Monospace (`font-mono`) uses JetBrains Mono via `@fontsource` (no CDN fonts).
+
+## Hosting (AWS Amplify)
+
+`amplify.yml` (this directory) is the Amplify Hosting build spec (`appRoot: frontend`, `npm ci` →
+`npm run build`, artifacts `dist/`, caches `node_modules` + `~/.npm`).
+
+Configure these **once in the Amplify console** (the build spec must not fight them):
+
+- **Branch → environment**
+  - `dev` branch → `esp-dev.naratech.xyz` (dev env vars)
+  - `naratech` branch → `esp.naratech.xyz` (prod env vars) — release by merging `dev` → `naratech`
+  - Enable per-PR previews on PRs targeting `dev`.
+- **SPA rewrite rule** (so client-side routes resolve): rewrite
+  `</^[^.]+$|\.(?!(css|js|map|json|png|svg|woff2?|ico)$)([^.]+$)/>` → `/index.html` (200).

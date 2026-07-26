@@ -222,6 +222,26 @@ module "cognito" {
 }
 
 # --------------------------------------------------------------------------- #
+# Amplify Hosting — analyst dashboard (frontend/). Auto-builds on merge to
+# `dev` (-> esp-dev) and `naratech` (-> esp). Cognito ids flow in from above.
+# --------------------------------------------------------------------------- #
+module "amplify" {
+  source               = "../../modules/amplify"
+  project              = var.project
+  aws_region           = var.aws_region
+  github_access_token  = var.amplify_github_access_token
+  api_base_url         = var.dashboard_api_base_url
+  cognito_user_pool_id = module.cognito.user_pool_id
+  cognito_client_id    = module.cognito.client_id
+
+  # Domains are the delegated subdomain zones, never the naratech.xyz apex —
+  # the apex is managed in a different AWS account, which is why esp / esp-api /
+  # mail / esp-dev each exist as their own hosted zone here. Amplify resolves
+  # each domain to its zone in this account and writes its own DNS records.
+  # Those zones are created outside Terraform (see terraform.tfvars).
+}
+
+# --------------------------------------------------------------------------- #
 # GitHub Actions OIDC
 # --------------------------------------------------------------------------- #
 module "github_oidc" {
@@ -268,6 +288,27 @@ output "cognito_pool_id" {
 output "cognito_client_id" {
   value = module.cognito.client_id
 }
+
+output "amplify_app_id" {
+  value       = module.amplify.app_id
+  description = "Amplify app id for the dashboard."
+}
+
+output "amplify_dev_url" {
+  value       = module.amplify.dev_branch_url
+  description = "Default Amplify URL for the dev branch (before the custom domain resolves)."
+}
+
+output "amplify_prod_url" {
+  value       = module.amplify.prod_branch_url
+  description = "Default Amplify URL for the naratech (prod) branch."
+}
+
+output "amplify_domain_records" {
+  value       = module.amplify.amplify_domain_records
+  description = "Amplify's cert-verification records. Normally empty/unneeded now that each domain is a Route53 zone in this account — Amplify writes its own records."
+}
+
 
 output "datasets_bucket" {
   value = module.s3_datasets.bucket_id
