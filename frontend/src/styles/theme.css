@@ -1,0 +1,131 @@
+@import 'tailwindcss';
+
+/*
+ * Email Security Pipeline — fixed cyber-SOC design tokens.
+ * Dark is the default (:root); light overrides on [data-theme="light"].
+ * These are the ONLY colors in the app — components reference them via the
+ * Tailwind utilities mapped in @theme below (bg-surface, text-verdict-quarantine,
+ * …). Do NOT hardcode hex in components; add a token here instead.
+ * Values are taken verbatim from docs/m7-t10-t14-frontend-build-prompt.md.
+ */
+
+:root {
+  /* Dark (default) */
+  --background: #070b14;
+  --surface: #0d1420;
+  --surface-2: #131c2e;
+  --border: #1e2a3f;
+  --foreground: #e6edf7;
+  --muted-foreground: #8ca0bb;
+  --primary: #22d3ee; /* cyan — identity color */
+  --primary-foreground: #06202a;
+  --secondary: #a78bfa; /* violet — sparing secondary */
+  --secondary-foreground: #1a1035;
+  --verdict-clean: #34d399;
+  --verdict-flag: #fbbf24;
+  --verdict-quarantine: #f87171;
+  --destructive: #ef4444;
+  --destructive-foreground: #fef2f2;
+  --chart-grid: #1e2a3f;
+
+  /* Derived UI roles (kept in-palette; no new hues) */
+  --ring: var(--primary);
+  --input: var(--border);
+  --radius: 0.625rem;
+}
+
+[data-theme='light'] {
+  --background: #f6f8fb;
+  --surface: #ffffff;
+  --surface-2: #eef2f8;
+  --border: #dce3ee;
+  --foreground: #0f1b2d;
+  --muted-foreground: #5b6b82;
+  --primary: #0891b2;
+  --primary-foreground: #ffffff;
+  --secondary: #7c3aed;
+  --secondary-foreground: #ffffff;
+  --verdict-clean: #059669;
+  --verdict-flag: #b45309;
+  --verdict-quarantine: #dc2626;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --chart-grid: #e3e9f2;
+}
+
+/* Map tokens to Tailwind color/theme utilities (v4 @theme inline). */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-verdict-clean: var(--verdict-clean);
+  --color-verdict-flag: var(--verdict-flag);
+  --color-verdict-quarantine: var(--verdict-quarantine);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-chart-grid: var(--chart-grid);
+
+  --font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+  html[data-theme='light'] {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+      Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Visible focus ring on every focusable — a11y baseline. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Cyan glow — reserved for the live indicator and the scanning animation
+     ONLY (spec rule). Do not apply elsewhere. */
+  .glow-live {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 40%, transparent),
+      0 0 12px color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}

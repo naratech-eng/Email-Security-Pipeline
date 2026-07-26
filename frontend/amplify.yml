@@ -1,0 +1,23 @@
+# AWS Amplify Hosting build spec for the Email Security Pipeline dashboard.
+# appRoot scopes this to the frontend/ subdirectory of the monorepo.
+# Branch -> environment mapping and the SPA rewrite rule are configured ONCE in
+# the Amplify console (see frontend/README.md) — this spec must not fight them.
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - ~/.npm/**/*
