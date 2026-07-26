@@ -95,3 +95,23 @@ variable "cognito_logout_urls" {
   type    = list(string)
   default = ["https://esp.naratech.xyz", "http://localhost:3000"]
 }
+
+# --------------------------------------------------------------------------- #
+# Amplify Hosting — dashboard frontend
+# --------------------------------------------------------------------------- #
+variable "amplify_github_access_token" {
+  type        = string
+  sensitive   = true
+  description = <<-EOT
+    GitHub PAT (classic; `repo` + `admin:repo_hook`) Amplify uses to connect the
+    repo and install the build webhook. Provide at apply time — do NOT commit:
+      export TF_VAR_amplify_github_access_token=ghp_xxx
+    In CI, inject it from a GitHub Actions secret.
+  EOT
+}
+
+variable "dashboard_api_base_url" {
+  type        = string
+  default     = "https://esp-api.naratech.xyz"
+  description = "FastAPI base URL the dashboard SPA calls (VITE_API_BASE_URL)."
+}
