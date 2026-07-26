@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { OtpInput } from '@/components/auth/OtpInput';
 import { PasswordHints, passwordValid } from '@/components/auth/PasswordHints';
 import { authErrorMessage } from '@/lib/authErrors';
+import { emailField } from '@/lib/validation';
 
 interface LocationState {
   email?: string;
@@ -31,6 +32,11 @@ export default function ForgotPassword() {
 
   async function onRequest(e: FormEvent) {
     e.preventDefault();
+    const parsed = emailField.safeParse(email);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Enter a valid email address');
+      return;
+    }
     setError(null);
     setBusy(true);
     try {

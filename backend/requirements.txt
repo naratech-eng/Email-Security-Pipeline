@@ -2,6 +2,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.9
 boto3>=1.35
+pyjwt[crypto]>=2.9       # M7-T14 — verify Cognito access-token JWTs against JWKS
 python-multipart>=0.0.9  # required by FastAPI for Form/File (/analyze/email upload)
 psycopg[binary]>=3.2     # M7-T15 detections store (RDS Postgres)
 alembic>=1.13            # M7-T15 schema migrations
