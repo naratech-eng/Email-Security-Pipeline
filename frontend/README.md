@@ -4,8 +4,11 @@ Production React SPA (the analyst-facing view of the CYT300 phishing-detection p
 Built with Vite + TypeScript (strict), Tailwind CSS v4, shadcn/ui, react-router, AWS Amplify
 (Cognito auth), Recharts, lucide-react, and Framer Motion.
 
-> Being built in slices. **Slice 1 (this)** = project scaffold, the fixed cyber-SOC design
-> system, and the app shell. Auth, detections, analyze, overview, and users land in later slices.
+> Being built in slices:
+> **1** scaffold, design system, app shell · **2** Cognito auth, roles, avatars ·
+> **3 (this)** API client + the shared analysis view · **4** detections workspace and
+> detail · **5** Analyze flow · **6** Overview wall · **7** user management.
+> Pages not yet built show a themed placeholder, so the shell stays navigable throughout.
 
 ## Local setup
 
@@ -36,6 +39,34 @@ All config comes from `import.meta.env` — nothing is hardcoded. Copy `.env.exa
 
 The shell (slice 1) only needs `VITE_APP_ENV`; the Cognito/API vars are validated lazily when
 the auth and data slices use them, so you can preview the shell before wiring the full env.
+
+## Data layer & the shared analysis view (slice 3)
+
+Everything that talks to the FastAPI service goes through `src/lib/api.ts`:
+
+- `apiFetch` (`src/auth/authApi.ts`) attaches the Cognito **access token**; only `/health`
+  skips it, because that endpoint is public.
+- FastAPI's `{"detail": ...}` bodies (string *or* validation array) are flattened into one
+  `ApiError` carrying `status` + a readable `message`, so pages render errors directly.
+  `isAbortError()` marks requests to drop silently rather than surface.
+- Endpoints from the agreed-but-undeployed contract degrade instead of throwing:
+  `getDetection()` falls back to scanning the feed when `GET /detections/{id}` 404s, and
+  `reviewDetection()` returns `null` when `PATCH /detections/{id}` isn't live yet.
+- `analyzeEmail()` enforces the client-side rules before spending a ~40s cold start:
+  exactly one of pasted text or file, and ≤ 1 MB (`MAX_EMAIL_BYTES`).
+
+Both API payload shapes are normalized once, in `src/lib/normalize.ts`, into the single
+`AnalysisResult` view-model (`src/lib/types.ts`) — `fromDetection()` for a persisted
+`DetectionRecord`, `fromAnalyze()` for a manual `POST /analyze/email`. Both routes then
+render the same `<ResultDisplay>` (`src/components/analysis/`), which is why a server
+detection and a manual analysis read identically; `provenance` is a label only and never
+branches layout. Review controls are injected via the `actions` prop by whichever page
+holds the permission, keeping the renderer presentational.
+
+Two safety rules live in this layer: URLs and sender domains are **defanged**
+(`src/lib/defang.ts` — `hxxp://`, `[.]`) and rendered as plain text, never anchors and
+never via `dangerouslySetInnerHTML`; and no message body is ever displayed, because the
+pipeline never stores one.
 
 ## Build
 
