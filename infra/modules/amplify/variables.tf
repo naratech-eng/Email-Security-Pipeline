@@ -46,6 +46,18 @@ variable "cognito_client_id" {
   description = "Cognito app client id (VITE_COGNITO_CLIENT_ID)."
 }
 
+variable "cognito_identity_pool_id" {
+  type        = string
+  default     = ""
+  description = "Cognito identity pool id (VITE_COGNITO_IDENTITY_POOL_ID) — enables browser S3 avatar uploads."
+}
+
+variable "avatars_bucket" {
+  type        = string
+  default     = ""
+  description = "S3 avatars bucket name (VITE_AVATARS_BUCKET)."
+}
+
 variable "dev_branch" {
   type        = string
   description = "Git branch that deploys to the dev domain."

@@ -16,8 +16,8 @@ export const DURATION = {
 } as const;
 
 export const EASE = {
-  out: [0.16, 1, 0.3, 1],
-  inOut: [0.65, 0, 0.35, 1],
+  out: [0.16, 1, 0.3, 1] as [number, number, number, number],
+  inOut: [0.65, 0, 0.35, 1] as [number, number, number, number],
 } as const;
 
 export const transitions = {
