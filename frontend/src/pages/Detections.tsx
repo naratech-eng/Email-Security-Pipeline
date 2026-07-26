@@ -7,16 +7,15 @@ import {
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DetectionsTable } from '@/components/detections/DetectionsTable';
 import { FeedStatusBar } from '@/components/detections/FeedStatusBar';
 import { useDetectionsFeed } from '@/feed/DetectionsFeedProvider';
 import { hasClientFilters, visibleRows } from '@/feed/visibleRows';
 import { useDetectionsQuery } from '@/hooks/useDetectionsQuery';
 import { verdictMeta } from '@/lib/verdict';
-import { formatRelative } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DetectionSource, Verdict } from '@/lib/types';
 
@@ -221,32 +220,7 @@ export default function Detections() {
           )}
         </div>
       ) : (
-        // Interim row list — the semantic eight-column table is the next PR.
-        <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
-          {rows.map((row) => {
-            const meta = verdictMeta(row.verdict);
-            return (
-              <li
-                key={row.id}
-                className={cn(
-                  'flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm',
-                  arrivals.includes(row.id) && 'border-l-2 border-l-primary',
-                )}
-              >
-                <Badge variant={meta.badge}>{meta.label}</Badge>
-                <span className="min-w-0 flex-1 truncate text-foreground">
-                  {row.subject || '(no subject)'}
-                </span>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {Math.round(row.likelihood)}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {formatRelative(row.created_at)}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <DetectionsTable rows={rows} arrivals={arrivals} />
       )}
 
       <div className="flex items-center justify-between gap-3">
