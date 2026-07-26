@@ -8,10 +8,16 @@
 ###############################################################################
 
 resource "aws_amplify_app" "dashboard" {
-  name         = "${var.project}-dashboard"
-  repository   = var.github_repository
-  access_token = var.github_access_token
-  platform     = "WEB"
+  name       = "${var.project}-dashboard"
+  repository = var.github_repository
+  platform   = "WEB"
+
+  # null, not "", when no token is supplied: the provider validates
+  # access_token length as 1-255, so an empty string fails at plan time. The
+  # token is only needed to CREATE the app (it installs the GitHub webhook);
+  # it is write-only in the AWS API, so ignore_changes below means later
+  # applies -- including CI, which has no PAT -- plan clean without it.
+  access_token = var.github_access_token != "" ? var.github_access_token : null
 
   # App-wide env. Per-branch VITE_* values are set on each branch below.
   environment_variables = {
@@ -83,22 +89,39 @@ resource "aws_amplify_branch" "prod" {
 }
 
 # --------------------------------------------------------------------------- #
-# Custom domains: esp-dev.<domain> (dev) + esp.<domain> (prod)
+# Custom domains — one association per delegated zone, NOT one association on
+# the naratech.xyz apex.
+#
+# Why: Amplify auto-creates the verification + CNAME records when the hosted
+# zone for domain_name lives in this AWS account. naratech.xyz does not — it is
+# at the registrar (dns1.registrar-servers.com) — so an apex association would
+# emit records to add by hand for every subdomain, forever. esp.naratech.xyz and
+# esp-dev.naratech.xyz ARE delegated Route53 zones here, so pointing each
+# association at its own zone lets Amplify manage DNS itself. prefix="" targets
+# the zone apex, i.e. esp.naratech.xyz rather than something.esp.naratech.xyz.
+#
 # wait_for_verification=false so apply never blocks on DNS propagation.
 # --------------------------------------------------------------------------- #
-resource "aws_amplify_domain_association" "this" {
+resource "aws_amplify_domain_association" "prod" {
   count                 = var.create_domain_association ? 1 : 0
   app_id                = aws_amplify_app.dashboard.id
-  domain_name           = var.domain_name
+  domain_name           = var.prod_domain_name
+  wait_for_verification = false
+
+  sub_domain {
+    branch_name = aws_amplify_branch.prod.branch_name
+    prefix      = ""
+  }
+}
+
+resource "aws_amplify_domain_association" "dev" {
+  count                 = var.create_domain_association ? 1 : 0
+  app_id                = aws_amplify_app.dashboard.id
+  domain_name           = var.dev_domain_name
   wait_for_verification = false
 
   sub_domain {
     branch_name = aws_amplify_branch.dev.branch_name
-    prefix      = "esp-dev"
-  }
-
-  sub_domain {
-    branch_name = aws_amplify_branch.prod.branch_name
-    prefix      = "esp"
+    prefix      = ""
   }
 }

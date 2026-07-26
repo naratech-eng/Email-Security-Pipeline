@@ -19,6 +19,19 @@ output "prod_branch_url" {
 }
 
 output "amplify_domain_records" {
-  description = "DNS records to create if the custom domain isn't a Route53 zone in this account (add these where naratech.xyz DNS is managed)."
-  value       = var.create_domain_association ? aws_amplify_domain_association.this[0].certificate_verification_dns_record : null
+  description = "Amplify cert-verification record per domain. Should not need manual entry: both domains are Route53 zones in this account, so Amplify writes its own records."
+  value = var.create_domain_association ? {
+    prod = aws_amplify_domain_association.prod[0].certificate_verification_dns_record
+    dev  = aws_amplify_domain_association.dev[0].certificate_verification_dns_record
+  } : null
+}
+
+output "prod_domain_url" {
+  description = "Custom-domain URL for the prod branch."
+  value       = var.create_domain_association ? "https://${var.prod_domain_name}" : null
+}
+
+output "dev_domain_url" {
+  description = "Custom-domain URL for the dev branch."
+  value       = var.create_domain_association ? "https://${var.dev_domain_name}" : null
 }

@@ -126,6 +126,8 @@ jobs:
       - name: Terraform plan
         id: plan
         if: needs.changes.outputs.infra == 'true'
+        env:
+          TF_VAR_amplify_github_access_token: ${{ secrets.TF_VAR_AMPLIFY_GITHUB_ACCESS_TOKEN }}
         run: |
           terraform plan \
             -var="key_name=${{ secrets.TF_VAR_KEY_NAME }}" \

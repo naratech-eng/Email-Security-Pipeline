@@ -11,11 +11,16 @@ variable "github_repository" {
 
 variable "github_access_token" {
   type        = string
+  default     = ""
   description = <<-EOT
     GitHub personal access token Amplify uses to connect the repo + install the
     build webhook (this is what makes a merge trigger a build). Classic PAT with
     `repo` + `admin:repo_hook` scope. Pass via TF_VAR_github_access_token or a
     tfvars file that is NOT committed — never hardcode.
+
+    Only required for the FIRST apply, which creates the app. "" is mapped to
+    null in main.tf (the provider rejects an empty string) so later applies —
+    including CI, which has no PAT — plan clean against the existing app.
   EOT
   sensitive   = true
 }
@@ -56,16 +61,22 @@ variable "prod_branch" {
 variable "create_domain_association" {
   type        = bool
   description = <<-EOT
-    Map custom subdomains (esp-dev / esp on domain_name) to the branches. Safe to
-    leave on: it never blocks apply (wait_for_verification=false). If naratech.xyz
-    is not a Route53 zone in this account, add the CNAME/verification records
-    Amplify emits (see the amplify_domain_records output) to wherever DNS lives.
+    Map the custom domains to the branches. Safe to leave on: it never blocks
+    apply (wait_for_verification=false). Each domain below must be a Route53
+    hosted zone in THIS account, so Amplify can create its own DNS records —
+    otherwise the records have to be added by hand wherever DNS is managed.
   EOT
   default     = true
 }
 
-variable "domain_name" {
+variable "prod_domain_name" {
   type        = string
-  description = "Apex domain for the custom subdomains."
-  default     = "naratech.xyz"
+  description = "Domain serving the prod branch. Must be a delegated Route53 zone in this account."
+  default     = "esp.naratech.xyz"
+}
+
+variable "dev_domain_name" {
+  type        = string
+  description = "Domain serving the dev branch. Must be a delegated Route53 zone in this account."
+  default     = "esp-dev.naratech.xyz"
 }

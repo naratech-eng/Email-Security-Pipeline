@@ -233,6 +233,12 @@ module "amplify" {
   api_base_url         = var.dashboard_api_base_url
   cognito_user_pool_id = module.cognito.user_pool_id
   cognito_client_id    = module.cognito.client_id
+
+  # Domains are the delegated subdomain zones, never the naratech.xyz apex —
+  # the apex is managed in a different AWS account, which is why esp / esp-api /
+  # mail / esp-dev each exist as their own hosted zone here. Amplify resolves
+  # each domain to its zone in this account and writes its own DNS records.
+  # Those zones are created outside Terraform (see terraform.tfvars).
 }
 
 # --------------------------------------------------------------------------- #
@@ -300,8 +306,9 @@ output "amplify_prod_url" {
 
 output "amplify_domain_records" {
   value       = module.amplify.amplify_domain_records
-  description = "DNS verification records to add if naratech.xyz DNS is not in this account."
+  description = "Amplify's cert-verification records. Normally empty/unneeded now that each domain is a Route53 zone in this account — Amplify writes its own records."
 }
+
 
 output "datasets_bucket" {
   value = module.s3_datasets.bucket_id
