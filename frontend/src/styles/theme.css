@@ -119,6 +119,30 @@
       0 0 12px color-mix(in srgb, var(--primary) 35%, transparent);
   }
 
+  /* Faint blueprint grid — structural texture for large surfaces (auth hero).
+     Not a glow; purely a subtle background pattern. */
+  .cyber-grid {
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in srgb, var(--border) 55%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--border) 55%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 44px 44px;
+  }
+
+  /* Elevated panel — soft depth for cards that should read above the surface. */
+  .panel-elevated {
+    box-shadow:
+      0 1px 0 0 color-mix(in srgb, var(--foreground) 4%, transparent) inset,
+      0 20px 40px -24px rgba(0, 0, 0, 0.7);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

@@ -60,11 +60,13 @@ resource "aws_amplify_branch" "dev" {
   enable_pull_request_preview = true # per-PR previews for PRs targeting dev
 
   environment_variables = {
-    VITE_API_BASE_URL         = var.api_base_url
-    VITE_COGNITO_USER_POOL_ID = var.cognito_user_pool_id
-    VITE_COGNITO_CLIENT_ID    = var.cognito_client_id
-    VITE_COGNITO_REGION       = var.aws_region
-    VITE_APP_ENV              = "DEV"
+    VITE_API_BASE_URL             = var.api_base_url
+    VITE_COGNITO_USER_POOL_ID     = var.cognito_user_pool_id
+    VITE_COGNITO_CLIENT_ID        = var.cognito_client_id
+    VITE_COGNITO_REGION           = var.aws_region
+    VITE_COGNITO_IDENTITY_POOL_ID = var.cognito_identity_pool_id
+    VITE_AVATARS_BUCKET           = var.avatars_bucket
+    VITE_APP_ENV                  = "DEV"
   }
 }
 
@@ -80,11 +82,13 @@ resource "aws_amplify_branch" "prod" {
   enable_pull_request_preview = false
 
   environment_variables = {
-    VITE_API_BASE_URL         = var.api_base_url
-    VITE_COGNITO_USER_POOL_ID = var.cognito_user_pool_id
-    VITE_COGNITO_CLIENT_ID    = var.cognito_client_id
-    VITE_COGNITO_REGION       = var.aws_region
-    VITE_APP_ENV              = "PROD"
+    VITE_API_BASE_URL             = var.api_base_url
+    VITE_COGNITO_USER_POOL_ID     = var.cognito_user_pool_id
+    VITE_COGNITO_CLIENT_ID        = var.cognito_client_id
+    VITE_COGNITO_REGION           = var.aws_region
+    VITE_COGNITO_IDENTITY_POOL_ID = var.cognito_identity_pool_id
+    VITE_AVATARS_BUCKET           = var.avatars_bucket
+    VITE_APP_ENV                  = "PROD"
   }
 }
 

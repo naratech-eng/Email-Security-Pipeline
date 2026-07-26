@@ -24,7 +24,7 @@ export function PagePlaceholder({
       variants={fadeInUp}
       initial="hidden"
       animate="show"
-      className="mx-auto flex max-w-xl flex-col items-center gap-4 rounded-xl border border-border bg-surface px-8 py-16 text-center"
+      className="panel-elevated mx-auto flex max-w-xl flex-col items-center gap-4 rounded-2xl border border-border bg-surface px-8 py-16 text-center"
     >
       <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Icon className="size-6" aria-hidden />

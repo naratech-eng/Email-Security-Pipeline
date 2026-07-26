@@ -212,13 +212,23 @@ module "ses_relay" {
 }
 
 # --------------------------------------------------------------------------- #
+# S3 — profile avatars (browser upload via Cognito Identity Pool)
+# --------------------------------------------------------------------------- #
+module "s3_avatars" {
+  source      = "../../modules/s3_avatars"
+  project     = var.project
+  bucket_name = "${var.project}-avatars-${var.aws_region}-802531654188"
+}
+
+# --------------------------------------------------------------------------- #
 # Cognito
 # --------------------------------------------------------------------------- #
 module "cognito" {
-  source        = "../../modules/cognito"
-  project       = var.project
-  callback_urls = var.cognito_callback_urls
-  logout_urls   = var.cognito_logout_urls
+  source             = "../../modules/cognito"
+  project            = var.project
+  callback_urls      = var.cognito_callback_urls
+  logout_urls        = var.cognito_logout_urls
+  avatars_bucket_arn = module.s3_avatars.bucket_arn
 }
 
 # --------------------------------------------------------------------------- #
@@ -233,6 +243,10 @@ module "amplify" {
   api_base_url         = var.dashboard_api_base_url
   cognito_user_pool_id = module.cognito.user_pool_id
   cognito_client_id    = module.cognito.client_id
+
+  # Enables authenticated browser->S3 avatar uploads in the deployed app.
+  cognito_identity_pool_id = module.cognito.identity_pool_id
+  avatars_bucket           = module.s3_avatars.bucket_id
 
   # Domains are the delegated subdomain zones, never the naratech.xyz apex —
   # the apex is managed in a different AWS account, which is why esp / esp-api /
@@ -287,6 +301,16 @@ output "cognito_pool_id" {
 
 output "cognito_client_id" {
   value = module.cognito.client_id
+}
+
+output "cognito_identity_pool_id" {
+  value       = module.cognito.identity_pool_id
+  description = "VITE_COGNITO_IDENTITY_POOL_ID for the dashboard."
+}
+
+output "avatars_bucket" {
+  value       = module.s3_avatars.bucket_id
+  description = "VITE_AVATARS_BUCKET for the dashboard."
 }
 
 output "amplify_app_id" {

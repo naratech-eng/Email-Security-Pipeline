@@ -50,3 +50,24 @@ export function cognitoConfig(): CognitoConfig {
 export function envLabel(): AppEnvLabel {
   return import.meta.env.VITE_APP_ENV === 'PROD' ? 'PROD' : 'DEV';
 }
+
+export interface AvatarStorageConfig {
+  identityPoolId: string;
+  bucket: string;
+  region: string;
+}
+
+/**
+ * S3 avatar-upload config. Returns null when the identity pool / bucket aren't
+ * configured — callers then fall back to a generated avatar (no upload).
+ */
+export function avatarStorageConfig(): AvatarStorageConfig | null {
+  const identityPoolId = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID;
+  const bucket = import.meta.env.VITE_AVATARS_BUCKET;
+  if (!identityPoolId || !bucket) return null;
+  return {
+    identityPoolId,
+    bucket,
+    region: import.meta.env.VITE_COGNITO_REGION || 'us-east-1',
+  };
+}
