@@ -229,6 +229,11 @@ module "cognito" {
   callback_urls      = var.cognito_callback_urls
   logout_urls        = var.cognito_logout_urls
   avatars_bucket_arn = module.s3_avatars.bucket_arn
+
+  # Send verification/reset emails from the verified mail.naratech.xyz SES
+  # identity instead of the throttled COGNITO_DEFAULT sender.
+  ses_source_arn = module.ses_relay.identity_arn
+  ses_from_email = "no-reply@mail.naratech.xyz"
 }
 
 # --------------------------------------------------------------------------- #
