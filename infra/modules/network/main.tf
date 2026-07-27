@@ -203,14 +203,46 @@ locals {
   ]) : toset([])
 }
 
+# Not every service is offered in every AZ — cognito-idp covers only a subset,
+# while secretsmanager/ecr/logs cover all of them. Pinning every endpoint to
+# private[0] therefore fails for the narrower services ("does not support the
+# availability zone of the subnet"), and hardcoding an AZ name is unsafe because
+# AZ names map to different physical zones per account. So ask each service which
+# AZs it supports and place its endpoint in the first private subnet that matches.
+data "aws_vpc_endpoint_service" "interface" {
+  for_each     = local.interface_endpoint_services
+  service_name = "com.amazonaws.${data.aws_region.current.name}.${each.value}"
+}
+
+locals {
+  # service -> private subnet ids in AZs that service actually supports
+  endpoint_subnets = {
+    for svc in local.interface_endpoint_services : svc => [
+      for s in aws_subnet.private : s.id
+      if contains(data.aws_vpc_endpoint_service.interface[svc].availability_zones, s.availability_zone)
+    ]
+  }
+}
+
 resource "aws_vpc_endpoint" "interface" {
-  for_each            = local.interface_endpoint_services
-  vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.${each.value}"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private[0].id]
+  for_each          = local.interface_endpoint_services
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.${each.value}"
+  vpc_endpoint_type = "Interface"
+  # Single-AZ per endpoint, mirroring the dev cost tradeoff above — but the AZ is
+  # now chosen from what the service supports rather than assumed.
+  subnet_ids = length(local.endpoint_subnets[each.key]) > 0 ? [
+    local.endpoint_subnets[each.key][0]
+  ] : []
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
+
+  lifecycle {
+    precondition {
+      condition     = length(local.endpoint_subnets[each.key]) > 0
+      error_message = "No private subnet is in an availability zone that supports com.amazonaws.${data.aws_region.current.name}.${each.key}. Add a private subnet in one of: ${join(", ", data.aws_vpc_endpoint_service.interface[each.key].availability_zones)}."
+    }
+  }
 
   tags = { Name = "${var.project}-vpce-${each.value}", Project = var.project }
 }
