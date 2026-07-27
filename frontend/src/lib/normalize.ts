@@ -47,6 +47,9 @@ export function fromDetection(rec: DetectionRecord): AnalysisResult {
 
 export function fromAnalyze(res: AnalyzeResponse): AnalysisResult {
   return {
+    // Present only when the backend persisted the row. Everything that needs a
+    // stored record — the detections link, review controls — keys off this.
+    id: res.detection_id ?? undefined,
     verdict: res.verdict,
     likelihood: res.likelihood,
     summary: res.summary,

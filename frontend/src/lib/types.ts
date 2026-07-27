@@ -72,6 +72,11 @@ export interface AnalyzeResponse {
     num_urls: number;
     attachment_count: number;
   };
+  /**
+   * Row id of the stored detection. Null when persistence failed open — the
+   * analysis is still valid, but there's no saved row to link to or review.
+   */
+  detection_id?: number | null;
 }
 
 /** The normalized model the shared ResultDisplay renders. */
