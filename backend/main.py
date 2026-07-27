@@ -276,6 +276,30 @@ class DetectionRecord(BaseModel):
     urls: list
 
 
+class DetectionSeriesPoint(BaseModel):
+    bucket_start: str  # ISO, aligned to an absolute hour/day boundary
+    count: int
+
+
+class DetectionStats(BaseModel):
+    """
+    Overview-wall aggregates. Every figure except the two `newest_*` timestamps
+    is scoped to the window, so the dashboard can label one denominator rather
+    than mixing an all-time count with a windowed chart.
+    """
+    window_hours: int
+    window_start: str  # rounded out to a bucket boundary, so sum(series) == total
+    bucket_unit: str  # "hour" | "day"
+    generated_at: str  # server clock — freshness is measured against this, not the browser's
+    total: int
+    by_verdict: dict[str, int]
+    by_source: dict[str, int]
+    series: list[DetectionSeriesPoint]
+    newest_at: Optional[str]
+    newest_server_at: Optional[str]  # unbounded by the window; drives the "quiet" rule
+    reviewed: Optional[dict]  # null until review persistence exists
+
+
 # The direction that makes each URL feature suspicious, so the dashboard can
 # explain *why* without hard-coding copy on the frontend.
 _URL_SUSPICIOUS = {
@@ -503,6 +527,32 @@ def list_detections_route(
     if verdict is not None and verdict not in ('clean', 'flag', 'quarantine'):
         raise HTTPException(status_code=400, detail='verdict must be "clean", "flag", or "quarantine".')
     return db.list_detections(source=source, verdict=verdict, limit=limit, offset=offset)
+
+
+# Declared before any future /detections/{id} route so "stats" is never
+# captured as an id. Kept as a sibling of /detections rather than folded into
+# it: that route is `response_model=list[DetectionRecord]`, so adding totals
+# would mean an envelope, breaking every existing row consumer.
+@app.get(
+    '/detections/stats',
+    response_model=Optional[DetectionStats],
+    dependencies=[Depends(require_auth)],
+)
+def detections_stats_route(
+    window_hours: int = Query(
+        24, ge=1, le=168, description='Window in hours: 24 (1d), 72 (3d), or 168 (7d).'
+    ),
+):
+    """
+    Aggregates the Overview wall cannot derive from the row feed: the feed
+    returns the most recent N rows, so any proportion taken from it swings with
+    traffic instead of describing the period.
+
+    Returns null (not zeros) when the database is unreachable, so the dashboard
+    can tell "we looked and found none" from "we don't know" and avoid rendering
+    an outage as a quiet night.
+    """
+    return db.detection_stats(window_hours=window_hours)
 
 
 class ClaimRoleResponse(BaseModel):
