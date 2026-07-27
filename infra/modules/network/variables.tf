@@ -22,7 +22,7 @@ variable "enable_nat_gateway" {
 }
 
 variable "enable_vpc_endpoints" {
-  description = "Create VPC endpoints (Secrets Manager, ECR, CloudWatch Logs, S3) so ECS Fargate tasks in the private subnets can reach those AWS services without a NAT gateway. On by default — without either this or enable_nat_gateway, ECS tasks can't fetch secrets or pull images and the service can't start at all."
+  description = "Create VPC endpoints (Secrets Manager, ECR, CloudWatch Logs, Cognito IDP, S3) so ECS Fargate tasks in the private subnets can reach those AWS services without a NAT gateway. On by default — without either this or enable_nat_gateway, ECS tasks can't fetch secrets or pull images and the service can't start at all, and token verification hangs on the Cognito JWKS fetch."
   type        = bool
   default     = true
 }
