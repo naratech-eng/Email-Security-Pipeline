@@ -15,6 +15,12 @@ name: DAST — Nightly Active Scan
 # "dast-bot" identity by query. Scheduled at low-traffic hours and bounded
 # by --max-examples for this reason. Before a demo: manually review/clear
 # recent low-likelihood detections with an obviously fuzzed subject/sender.
+# NOTE: `schedule` only fires from the repository's DEFAULT branch, which is
+# `naratech` here (not `dev`). So the nightly does not start running on a
+# cadence until this file reaches naratech; before then, trigger it manually
+# with `gh workflow run dast-nightly.yml`. Its runs are attributed to
+# naratech, which is why naratech-promotion-gate.yml deliberately does not
+# filter by branch when reading the latest conclusion.
 on:
   schedule:
     - cron: "0 8 * * *" # 03:00 America/Toronto (04:00 EDT) -- low traffic, well clear of demo hours
@@ -40,7 +46,9 @@ jobs:
       # endpoint. Tracked separately to add authenticated coverage once
       # verified against a real run.
       - name: ZAP full active scan
-        uses: zaproxy/action-full-scan@v0.15.0
+        # v0.13.0 is action-full-scan's latest -- it does NOT share a version
+        # number with action-baseline (which is at v0.15.0). Both are node24.
+        uses: zaproxy/action-full-scan@v0.13.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ env.TARGET }}
@@ -66,19 +74,29 @@ jobs:
             --max-examples 20 \
             --report-junit-path unauth-report.xml
 
+      # The `secrets` context is NOT available in an `if:` condition (only in
+      # `with:`, `env:`, and a few other places) -- referencing it there is a
+      # workflow-validation error that fails the ENTIRE file to parse, so no
+      # jobs run at all. Map it to env first, then branch on the env var.
       - name: Fuzz — authenticated
-        if: ${{ secrets.DAST_API_TOKEN != '' }}
+        env:
+          DAST_API_TOKEN: ${{ secrets.DAST_API_TOKEN }}
         run: |
+          if [ -z "$DAST_API_TOKEN" ]; then
+            echo "DAST_API_TOKEN not set — skipping the authenticated pass."
+            echo "Set it as a repo secret to fuzz behind auth (see docs/devsecops.md §3.3)."
+            exit 0
+          fi
           schemathesis run "${{ env.TARGET }}/openapi.json" \
             --url "${{ env.TARGET }}" \
-            --header "Authorization:Bearer ${{ secrets.DAST_API_TOKEN }}" \
+            --header "Authorization:Bearer $DAST_API_TOKEN" \
             --checks all \
             --max-examples 20 \
             --report-junit-path auth-report.xml
 
       - name: Upload fuzz reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7 # v4 is still node20 (deprecated); v7 is node24
         with:
           name: schemathesis-reports
           path: "*-report.xml"

@@ -14,6 +14,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -25,6 +26,28 @@ jobs:
               - 'notebooks/M4/m4_t3_url_features.py'
             frontend:
               - 'frontend/**'
+            workflows:
+              - '.github/workflows/**'
+
+  # A workflow with an invalid expression context (e.g. `secrets` in an `if:`)
+  # is not a YAML error -- it parses fine and then fails at RUN time with zero
+  # jobs and no usable log, which is exactly how dast-nightly.yml first broke.
+  # actionlint validates contexts, action refs, and shell snippets statically,
+  # so that class of bug fails a PR instead of a scheduled run at 3am.
+  actionlint:
+    name: actionlint (workflow validation)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      # Pinned, not :latest -- a lint gate that silently changes behaviour
+      # under you is worse than no gate. Downloaded rather than run via the
+      # Docker action so the version is explicit and the run is fast.
+      - name: Run actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
 
   python-sast:
     name: bandit + pip-audit
@@ -68,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7 # v4 is still node20 (deprecated); v7 is node24
         with:
           node-version: "22" # react-router@8 declares engines.node >=22.22.0
           cache: "npm"
@@ -93,13 +116,13 @@ jobs:
   sast-gate:
     name: SAST + dependency scan
     runs-on: ubuntu-latest
-    needs: [changes, python-sast, frontend-audit]
+    needs: [changes, python-sast, frontend-audit, actionlint]
     if: always()
     steps:
       - name: Check results
         run: |
-          if [ "${{ needs.python-sast.result }}" == "failure" ] || [ "${{ needs.frontend-audit.result }}" == "failure" ]; then
-            echo "A SAST or dependency scan failed." >&2
+          if [ "${{ needs.python-sast.result }}" == "failure" ] || [ "${{ needs.frontend-audit.result }}" == "failure" ] || [ "${{ needs.actionlint.result }}" == "failure" ]; then
+            echo "A SAST, dependency, or workflow-lint check failed." >&2
             exit 1
           fi
           echo "OK — no HIGH findings in scans that ran (backend changed: ${{ needs.changes.outputs.backend }}, frontend changed: ${{ needs.changes.outputs.frontend }})."

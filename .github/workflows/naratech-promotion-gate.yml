@@ -23,7 +23,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RESULT=$(gh api "repos/${{ github.repository }}/actions/workflows/dast-nightly.yml/runs?branch=dev&status=completed&per_page=1" \
+          # No branch filter on purpose: `schedule` events run from the
+          # DEFAULT branch (naratech here, not dev), so their runs are
+          # attributed to naratech. Filtering ?branch=dev would return zero
+          # runs, fall through to the "nothing to gate on" path, and silently
+          # pass -- defeating the gate. Take the most recent completed run
+          # regardless of branch instead.
+          RESULT=$(gh api "repos/${{ github.repository }}/actions/workflows/dast-nightly.yml/runs?status=completed&per_page=1" \
             --jq '.workflow_runs[0] | {conclusion, created_at, html_url}')
 
           if [ -z "$RESULT" ] || [ "$RESULT" == "null" ]; then
