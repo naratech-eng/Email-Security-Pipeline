@@ -79,6 +79,60 @@ export interface AnalyzeResponse {
   detection_id?: number | null;
 }
 
+/**
+ * `GET /detections/stats` response — the Overview wall's aggregate source.
+ *
+ * Everything except the two `newest_*` timestamps is scoped to the window, so
+ * the wall labels one denominator instead of mixing an all-time count with a
+ * windowed chart. The endpoint itself returns `null` (not this shape) when the
+ * database is unreachable — see `getDetectionStats`.
+ */
+export interface DetectionStatsResponse {
+  window_hours: number;
+  /** Rounded out to a bucket boundary, so `sum(series) === total`. */
+  window_start: string;
+  bucket_unit: 'hour' | 'day';
+  /** Server clock — aggregate freshness is measured against this, not the browser's. */
+  generated_at: string;
+  total: number;
+  by_verdict: Record<Verdict, number>;
+  by_source: Record<DetectionSource, number>;
+  series: { bucket_start: string; count: number }[];
+  newest_at: string | null;
+  /** NOT window-bounded — drives the "mail pipeline quiet" rule. */
+  newest_server_at: string | null;
+  /** Null until review persistence exists; the precision tile stays hidden on it. */
+  reviewed: null;
+}
+
+/**
+ * The normalized model every Overview tile reads, from EITHER source.
+ *
+ * `basis` is the load-bearing field: it lets one set of tiles render from the
+ * aggregate endpoint or from the shared feed window without branching on data
+ * availability, and it keeps `windowLabel` travelling WITH the numbers — so a
+ * tile cannot print "last 24h" while showing window-derived counts.
+ */
+export interface OverviewStats {
+  basis: 'aggregate' | 'window';
+  /** Human denominator, e.g. "last 24h" or "last 50 detections". */
+  windowLabel: string;
+  total: number;
+  byVerdict: Record<Verdict, number>;
+  bySource: Record<DetectionSource, number>;
+  /** Epoch ms at an absolute hour/day boundary — chart-ready, zero-filled. */
+  series: { bucketStart: number; count: number }[];
+  newestAt: string | null;
+  /**
+   * Null on the window path means "not knowable from here", NOT "never" — a
+   * 50-row window can hold zero server rows while the pipeline is healthy.
+   */
+  newestServerAt: string | null;
+  /** Null on the window path — there is no server clock to anchor freshness to. */
+  generatedAt: string | null;
+  reviewed: null;
+}
+
 /** The normalized model the shared ResultDisplay renders. */
 export interface AnalysisResult {
   id?: number; // present for persisted detections
