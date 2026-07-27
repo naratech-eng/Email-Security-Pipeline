@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { confirmSignUp, resendSignUpCode } from 'aws-amplify/auth';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';

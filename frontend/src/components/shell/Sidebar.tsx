@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router';
 import { ShieldCheck, Settings, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {

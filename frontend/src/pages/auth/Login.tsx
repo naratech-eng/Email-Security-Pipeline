@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { signIn, confirmSignIn } from 'aws-amplify/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Mail, Lock } from 'lucide-react';

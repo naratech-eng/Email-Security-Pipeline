@@ -73,24 +73,29 @@ Static Application Security Testing analyses our **own source code** (the IaC sc
 
 Dynamic Application Security Testing exercises the **running** service, so it runs **post-deploy** (against the dev/staging ECS service and the Amplify PR preview), plus a heavier nightly scan. DAST cannot run on a pure PR with no live target.
 
-| Target | Tool | Stage | Scan type |
-|---|---|---|---|
-| FastAPI inference API | **OWASP ZAP** | PR preview (passive baseline) + nightly (full active) | spidering, injection, headers, auth |
-| API contract / fuzzing | **Schemathesis** (from FastAPI OpenAPI schema) | post-deploy | property-based fuzzing of every endpoint |
-| Dashboard (Amplify preview) | **OWASP ZAP** (authenticated via Cognito token) | post-deploy | XSS, CSRF, security headers, auth bypass |
-| ALB TLS endpoint | **testssl.sh** / **sslyze** | nightly | weak ciphers, protocol downgrade, cert issues |
-| Mail server (relay/spoof) | **swaks** scripts (test-plan SEC-01/02) | staging | open relay, SPF/DKIM/DMARC bypass |
+| Target | Tool | Stage | Scan type | Status |
+|---|---|---|---|---|
+| FastAPI inference API | **OWASP ZAP** | post-deploy (passive baseline) + nightly (full active) | spidering, injection, headers, auth | **implemented** — `dast-baseline.yml`, `dast-nightly.yml` |
+| API contract / fuzzing | **Schemathesis** (from FastAPI OpenAPI schema) | nightly | property-based fuzzing of every endpoint | **implemented** — `dast-nightly.yml`, unauth + authenticated passes |
+| Dashboard (Amplify preview) | **OWASP ZAP** (authenticated via Cognito token) | post-deploy | XSS, CSRF, security headers, auth bypass | not yet — nightly ZAP currently targets the API only |
+| ALB TLS endpoint | **testssl.sh** / **sslyze** | nightly | weak ciphers, protocol downgrade, cert issues | not yet |
+| Mail server (relay/spoof) | **swaks** scripts (test-plan SEC-01/02) | staging | open relay, SPF/DKIM/DMARC bypass | not yet (manual swaks testing exists, see `docs/m7-t4-t6-mail-filter-testing.md`, not wired into CI) |
 
-**Gate:** the passive ZAP baseline runs on every preview (informational); a **HIGH** finding from the nightly full scan or Schemathesis **blocks promotion to `naratech`** (demo/prod) and is filed in the Issues & Blockers DB with an owner. Fail-open behaviour (S-07) is itself a DAST scenario: ZAP/Schemathesis hammering the API must never block mail flow.
+**Gate:** the passive ZAP baseline runs post-deploy (informational, `fail_action: false`); a **HIGH** finding from the nightly full scan or Schemathesis fails `dast-nightly.yml`, which `naratech-promotion-gate.yml` reads as a required check on any PR targeting `naratech`. Fail-open behaviour (S-07) is itself a DAST scenario: ZAP/Schemathesis hammering the API must never block mail flow.
+
+**Known trade-off, accepted deliberately (§4.1 — shared backend):** Schemathesis fuzzes `/analyze/email` with generated bodies against the one real `detections` table shared by dev and the naratech-promoted frontend. `submitted_by` is a client-supplied field, not derived from the auth token, so fuzzer-generated rows aren't reliably queryable by identity. Bounded via `--max-examples` and scheduled at low-traffic hours; review/clear obviously-fuzzed rows before a demo.
+
+**Also not yet implemented from §3.2:** Semgrep, CodeQL, gitleaks, and SonarCloud. Bandit + pip-audit + npm audit (`sast.yml`) cover the PR-blocking gate for what exists today; the rest is a real gap versus the intent of this section, not an oversight to gloss over.
 
 ### 3.4 Where each control runs
 
 ```
-PR opened ──► SAST (Bandit, Semgrep, CodeQL, gitleaks, eslint-security)  [BLOCKS MERGE]
-          └─► SCA + IaC (pip-audit, npm audit, Trivy, tfsec, Checkov)     [BLOCKS MERGE]
-merge to dev ──► deploy to dev/staging ──► DAST passive (ZAP baseline, Schemathesis smoke)
-nightly ──────► DAST full (ZAP active scan, Schemathesis fuzz, testssl)   [BLOCKS PROMOTION]
-promote to naratech ──► manual approval (no open HIGH DAST findings)
+PR opened ──► SAST (Bandit, pip-audit, npm audit)                        [BLOCKS MERGE, sast.yml]
+          └─► IaC (Checkov, tfsec)                                        [BLOCKS MERGE, terraform-pr.yml]
+merge to dev ──► terraform apply + ECS deploy ──► DAST passive (ZAP baseline, dast-baseline.yml)
+nightly ──────► DAST full (ZAP active scan, Schemathesis fuzz)            [dast-nightly.yml]
+PR targeting naratech ──► naratech-promotion-gate.yml reads the latest
+                          nightly conclusion; fails the PR if it wasn't green
 ```
 
 ## 4. Branching & Environments
@@ -99,13 +104,51 @@ promote to naratech ──► manual approval (no open HIGH DAST findings)
 |---|---|---|
 | `feature/*` | none | per-feature branches; CI checks run on PR; plan posted as PR comment |
 | `dev-<name>` | none | personal working branches (`dev-nara`, `dev-michael`, …); same PR checks apply |
-| `dev` | dev | `terraform apply` runs automatically on merge |
-| `naratech` | prod (demo) | main branch; manual approval gate before apply |
-| tagged release `v*` | prod (demo) | alias for naratech-based releases |
+| `dev` | dev | `terraform apply` + backend ECS deploy run automatically on merge |
+| `naratech` | prod (demo) | main branch; frontend-only promotion — see below |
+| tagged release `v*` | prod (demo) | git tag created manually after a naratech merge (§4.2) |
 
 Flow: `feature/… / dev-<name> → dev → naratech`
 
 Amplify handles preview environments per PR for the dashboard automatically.
+
+### 4.1 What "promoting to naratech" actually does
+
+There is **one shared backend environment**, not a separate prod stack: one
+ECS cluster, one RDS instance, one mail server, one Cognito pool
+(`infra/envs/dev` is the only Terraform environment that exists). Neither
+`terraform-apply.yml` nor `backend-deploy.yml` trigger on `naratech` — only
+`dev`. A merge to `naratech` triggers exactly one thing: an Amplify build of
+the frontend to `esp.naratech.xyz`, pointed at the same API, database, and
+Cognito pool that `esp-dev.naratech.xyz` already uses.
+
+So "prod" here means "the stable, demo-facing frontend build," not an
+isolated environment. The manual approval gate this implies — no open HIGH
+DAST finding — is enforced as a required PR check
+(`naratech-promotion-gate.yml`) that reads the conclusion of the most recent
+`dast-nightly.yml` run rather than re-running DAST on the PR itself (too slow
+for a PR check, and DAST needs a live target that doesn't exist per-PR).
+
+A genuinely separate prod backend (its own ECS/RDS/mail server/Cognito pool)
+was considered and deliberately deferred — real infra cost roughly doubles,
+and a second mail server means a second DNS/SES/cert setup. Worth revisiting
+past the capstone if this becomes a real deployment.
+
+### 4.2 Creating a release
+
+After merging a PR into `naratech`:
+
+```bash
+git checkout naratech && git pull
+git tag -a v1.1.0 -m "v1.1.0"
+git push origin v1.1.0
+gh release create v1.1.0 --title "v1.1.0" --generate-notes
+```
+
+Version numbers are chosen and applied manually — no automated
+semantic-release. Bump the minor version for a feature merge, the patch
+version for a fix-only merge, matching conventional-commit intent even though
+nothing enforces it automatically.
 
 ## 5. Secrets & Identity
 

@@ -1,0 +1,41 @@
+name: DAST — ZAP Baseline
+
+# docs/devsecops.md §3.3 — passive scan against the live dev API after every
+# successful deploy. Passive only: spidering + header/config checks, no attack
+# payloads, so it's safe to run automatically against the shared backend
+# without generating junk data or side effects. Informational (does not block)
+# — the active/attack scanning that actually needs a gate is dast-nightly.yml.
+# NOTE: like `schedule`, a `workflow_run` trigger is only honoured from the
+# repository's DEFAULT branch (`naratech` here). This won't fire automatically
+# until the file reaches naratech; use `gh workflow run dast-baseline.yml`
+# to run it on demand before then.
+on:
+  workflow_run:
+    workflows: ["Backend Deploy — dev"] # must match backend-deploy.yml's `name:`, not its filename
+    branches: [dev] # which branch the UPSTREAM deploy ran on, not this file's branch
+    types: [completed]
+  workflow_dispatch: {}
+
+jobs:
+  zap-baseline:
+    name: ZAP passive baseline
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      issues: write # action-baseline files/updates a GitHub issue with results
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: "https://esp-api.naratech.xyz"
+          cmd_options: "-a" # include alpha-quality passive rules too
+          # Baseline is informational (§3.3: "passive baseline runs on every
+          # preview (informational)") -- don't fail the workflow on findings,
+          # only the nightly active scan gates promotion. No rules_file_name
+          # yet: nothing to suppress until a first run shows what's noisy.
+          fail_action: false

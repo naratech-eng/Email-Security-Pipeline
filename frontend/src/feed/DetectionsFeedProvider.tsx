@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { ApiError, isAbortError, listDetections } from '@/lib/api';
 import { readQuarantineAck, writeQuarantineAck } from '@/lib/quarantineAck';

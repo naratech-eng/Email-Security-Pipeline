@@ -1,0 +1,122 @@
+name: DAST — Nightly Active Scan
+
+# docs/devsecops.md §3.3 — the gate that actually blocks promotion. Runs
+# active/attack-style ZAP scanning + Schemathesis property-based fuzzing
+# against the live dev API. Nightly, not on every PR: DAST needs a running
+# target (can't run on a bare PR) and active scanning is comparatively slow
+# and resource-heavy.
+#
+# Known, accepted trade-off: this generates real POST traffic against the
+# SHARED dev/prod backend (see the PR that added §3.3's "shared backend"
+# decision) -- Schemathesis in particular will fuzz /analyze/email with
+# generated bodies, creating detections rows with garbage subjects/senders.
+# submitted_by is a client-supplied form field (backend/main.py), not derived
+# from the auth token, so generated rows are NOT reliably attributable to a
+# "dast-bot" identity by query. Scheduled at low-traffic hours and bounded
+# by --max-examples for this reason. Before a demo: manually review/clear
+# recent low-likelihood detections with an obviously fuzzed subject/sender.
+# NOTE: `schedule` only fires from the repository's DEFAULT branch, which is
+# `naratech` here (not `dev`). So the nightly does not start running on a
+# cadence until this file reaches naratech; before then, trigger it manually
+# with `gh workflow run dast-nightly.yml`. Its runs are attributed to
+# naratech, which is why naratech-promotion-gate.yml deliberately does not
+# filter by branch when reading the latest conclusion.
+on:
+  schedule:
+    - cron: "0 8 * * *" # 03:00 America/Toronto (04:00 EDT) -- low traffic, well clear of demo hours
+  workflow_dispatch: {}
+
+env:
+  TARGET: "https://esp-api.naratech.xyz"
+
+jobs:
+  zap-active:
+    name: ZAP full active scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+
+      # Unauthenticated for now: ZAP's authenticated-request replacer config
+      # needs an actual Docker run to validate the header injection, which
+      # this PR doesn't include untested. Still real coverage -- headers,
+      # error handling, and auth-bypass attempts against every discovered
+      # endpoint. Tracked separately to add authenticated coverage once
+      # verified against a real run.
+      - name: ZAP full active scan
+        # v0.13.0 is action-full-scan's latest -- it does NOT share a version
+        # number with action-baseline (which is at v0.15.0). Both are node24.
+        uses: zaproxy/action-full-scan@v0.13.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ env.TARGET }}
+          cmd_options: "-a"
+          fail_action: true # this IS the gate -- HIGH findings fail the job
+
+  schemathesis-fuzz:
+    name: Schemathesis API fuzzing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Schemathesis
+        run: pip install schemathesis
+
+      # Two passes: unauthenticated (catches auth-bypass / improper 401
+      # handling -- §3.3's "auth" coverage) and authenticated (the actual
+      # documented endpoint behavior). -n bounds both the run time and the
+      # number of generated /analyze/email rows landing in detections.
+      - name: Fuzz — unauthenticated
+        run: |
+          schemathesis run "${{ env.TARGET }}/openapi.json" \
+            --url "${{ env.TARGET }}" \
+            --checks all \
+            --max-examples 20 \
+            --report-junit-path unauth-report.xml
+
+      # The `secrets` context is NOT available in an `if:` condition (only in
+      # `with:`, `env:`, and a few other places) -- referencing it there is a
+      # workflow-validation error that fails the ENTIRE file to parse, so no
+      # jobs run at all. Map it to env first, then branch on the env var.
+      - name: Fuzz — authenticated
+        env:
+          DAST_API_TOKEN: ${{ secrets.DAST_API_TOKEN }}
+        run: |
+          if [ -z "$DAST_API_TOKEN" ]; then
+            echo "DAST_API_TOKEN not set — skipping the authenticated pass."
+            echo "Set it as a repo secret to fuzz behind auth (see docs/devsecops.md §3.3)."
+            exit 0
+          fi
+          schemathesis run "${{ env.TARGET }}/openapi.json" \
+            --url "${{ env.TARGET }}" \
+            --header "Authorization:Bearer $DAST_API_TOKEN" \
+            --checks all \
+            --max-examples 20 \
+            --report-junit-path auth-report.xml
+
+      - name: Upload fuzz reports
+        if: always()
+        uses: actions/upload-artifact@v7 # v4 is still node20 (deprecated); v7 is node24
+        with:
+          name: schemathesis-reports
+          path: "*-report.xml"
+          retention-days: 14
+
+  # Both scans feed into this: a naratech-targeting PR (see the
+  # naratech-promotion-gate job in terraform-pr.yml or wherever the gate
+  # lives) checks the CONCLUSION of the most recent run of this workflow,
+  # not just whether it exists -- this job's own success/failure is that
+  # signal.
+  gate:
+    name: DAST nightly gate
+    runs-on: ubuntu-latest
+    needs: [zap-active, schemathesis-fuzz]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.zap-active.result }}" == "failure" ] || [ "${{ needs.schemathesis-fuzz.result }}" == "failure" ]; then
+            echo "HIGH finding(s) in tonight's DAST run -- do not promote to naratech until triaged." >&2
+            exit 1
+          fi
+          echo "OK — no blocking findings in tonight's active scan + fuzz."

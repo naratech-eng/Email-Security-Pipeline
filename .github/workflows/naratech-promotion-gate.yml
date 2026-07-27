@@ -1,0 +1,51 @@
+name: naratech Promotion Gate
+
+# docs/devsecops.md §3.4 — "promote to naratech -> manual approval (no open
+# HIGH DAST findings)". Since backend/infra are a SHARED environment (no
+# separate prod stack — see the PR that made that decision explicit),
+# "promotion" is really: is the shared backend currently known-good? This
+# turns that manual check into a required PR status: read the conclusion of
+# the most recent dast-nightly.yml run and fail if it wasn't green. It does
+# NOT run DAST itself (too slow for a PR check) — it only reads yesterday's
+# result, so this is only as fresh as the last nightly run.
+on:
+  pull_request:
+    branches: [naratech]
+
+jobs:
+  check-dast-status:
+    name: no open HIGH DAST findings
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Check latest DAST nightly conclusion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # No branch filter on purpose: `schedule` events run from the
+          # DEFAULT branch (naratech here, not dev), so their runs are
+          # attributed to naratech. Filtering ?branch=dev would return zero
+          # runs, fall through to the "nothing to gate on" path, and silently
+          # pass -- defeating the gate. Take the most recent completed run
+          # regardless of branch instead.
+          RESULT=$(gh api "repos/${{ github.repository }}/actions/workflows/dast-nightly.yml/runs?status=completed&per_page=1" \
+            --jq '.workflow_runs[0] | {conclusion, created_at, html_url}')
+
+          if [ -z "$RESULT" ] || [ "$RESULT" == "null" ]; then
+            echo "::warning::No completed dast-nightly.yml run found yet — nothing to gate on. This is expected until the first scheduled run completes; not a failure."
+            exit 0
+          fi
+
+          CONCLUSION=$(echo "$RESULT" | jq -r '.conclusion')
+          AT=$(echo "$RESULT" | jq -r '.created_at')
+          URL=$(echo "$RESULT" | jq -r '.html_url')
+          echo "Most recent DAST nightly run: $CONCLUSION (started $AT)"
+          echo "$URL"
+
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::Last nightly DAST run did not pass ($CONCLUSION). Triage the finding at $URL before promoting to naratech, or re-run dast-nightly.yml manually once fixed."
+            exit 1
+          fi
+
+          echo "OK — most recent nightly scan passed."

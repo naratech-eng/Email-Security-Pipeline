@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Badge } from '@/components/ui/badge';
 import { defangText } from '@/lib/defang';
 import { formatDateTime, formatRelative } from '@/lib/format';
