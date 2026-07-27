@@ -1,10 +1,24 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { apiBaseUrl } from '@/lib/env';
 
-/** Access token for the current session, or null if unauthenticated. */
+/**
+ * How long to wait for Amplify to hand over a session before giving up.
+ * `fetchAuthSession()` can sit indefinitely when a token refresh never settles;
+ * without a bound, every caller awaits forever and the UI shows a loading state
+ * with no request in flight and no error — indistinguishable from a slow API.
+ * Failing here surfaces as a normal auth error the caller can render and retry.
+ */
+const SESSION_TIMEOUT_MS = 8_000;
+
+/** Access token for the current session, or null if unauthenticated/unavailable. */
 export async function getAccessToken(): Promise<string | null> {
   try {
-    const session = await fetchAuthSession();
+    const session = await Promise.race([
+      fetchAuthSession(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('session-timeout')), SESSION_TIMEOUT_MS),
+      ),
+    ]);
     return session.tokens?.accessToken?.toString() ?? null;
   } catch {
     return null;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { ArrowLeft, FileSearch, RotateCw, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -50,9 +50,20 @@ function EmptyPanel({
  */
 export default function DetectionDetail() {
   const { id } = useParams();
+  const location = useLocation();
   const detectionId = Number(id);
   const valid = Number.isInteger(detectionId) && detectionId > 0;
   const { canReviewDetections } = usePermissions();
+
+  // Return to the filtered list the analyst came from (RB-6), falling back to
+  // the bare feed for a deep link that carries no origin. Only same-app list
+  // paths are honoured — router state is user-controllable via history.
+  const fromState = (location.state as { from?: unknown } | null)?.from;
+  const backTo =
+    typeof fromState === 'string' && fromState.startsWith('/detections')
+      ? fromState
+      : '/detections';
+  const cameFromFilteredList = backTo !== '/detections';
 
   const [state, setState] = useState<State>({ phase: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
@@ -89,9 +100,9 @@ export default function DetectionDetail() {
     <div className="space-y-5">
       <div>
         <Button asChild variant="ghost" size="sm" className="-ml-3">
-          <Link to="/detections">
+          <Link to={backTo}>
             <ArrowLeft aria-hidden />
-            Detections
+            {cameFromFilteredList ? 'Back to filtered feed' : 'Detections'}
           </Link>
         </Button>
         <h1 className="mt-1 text-xl font-semibold text-foreground">
@@ -124,10 +135,17 @@ export default function DetectionDetail() {
         <EmptyPanel
           icon={FileSearch}
           title="Detection not found"
-          description="That id isn’t in the feed — it may have aged out of the retained window, or the link is wrong."
+          description={
+            // Two different situations, and only one is recoverable by the
+            // analyst: the row may simply be deeper than the lookup scans, or it
+            // may be genuinely past the horizon until GET /detections/{id} ships.
+            'That id isn’t in the most recent detections. It may sit deeper in the feed than this lookup reaches, or the link may be wrong — filters and paging on the list don’t affect this view.'
+          }
           action={
             <Button asChild variant="outline">
-              <Link to="/detections">Back to detections</Link>
+              <Link to={backTo}>
+                {cameFromFilteredList ? 'Back to filtered feed' : 'Back to detections'}
+              </Link>
             </Button>
           }
         />

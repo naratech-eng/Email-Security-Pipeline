@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { defangText } from '@/lib/defang';
 import { formatDateTime, formatRelative } from '@/lib/format';
@@ -58,13 +58,19 @@ interface DetectionsTableProps {
  */
 export function DetectionsTable({ rows, arrivals }: DetectionsTableProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const showReview = rows.some((row) => row.review_status);
+
+  // The filtered list the analyst came FROM (RB-6). Carried in router state so a
+  // deep link into the detail view still works — the path stays the only source
+  // of selection truth, and this is purely a return address.
+  const from = `${location.pathname}${location.search}`;
 
   function onRowClick(event: MouseEvent<HTMLTableRowElement>, id: number) {
     // The subject cell's <Link> handles its own navigation (and modifier-clicks).
     if ((event.target as HTMLElement).closest('a')) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    navigate(`/detections/${id}`);
+    navigate(`/detections/${id}`, { state: { from } });
   }
 
   return (
@@ -144,6 +150,7 @@ export function DetectionsTable({ rows, arrivals }: DetectionsTableProps) {
                 <td className="max-w-[22rem] px-3 py-2.5">
                   <Link
                     to={`/detections/${row.id}`}
+                    state={{ from }}
                     className="block truncate text-foreground underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                     title={row.subject ?? undefined}
                   >

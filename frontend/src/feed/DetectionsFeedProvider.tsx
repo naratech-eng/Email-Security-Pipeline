@@ -117,17 +117,24 @@ export function DetectionsFeedProvider({ children }: { children: ReactNode }) {
   const paramsRef = useRef(liveParams);
   paramsRef.current = liveParams;
   const maxSeenRef = useRef<number | null>(null);
+  const genRef = useRef(0);
   const liveAbortRef = useRef<AbortController | null>(null);
   const pageAbortRef = useRef<AbortController | null>(null);
 
   const fetchLive = useCallback(async () => {
-    liveAbortRef.current?.abort();
+    // Deliberately NOT aborting the previous request: two polls overlapping is
+    // harmless, but self-cancelling means a burst of triggers (visibility flips,
+    // a refresh click landing mid-poll) can abort every attempt and leave the
+    // feed with nothing in flight and nothing rendered. Instead each cycle takes
+    // a generation number and a stale response is ignored on arrival.
+    const gen = ++genRef.current;
     const controller = new AbortController();
     liveAbortRef.current = controller;
     const params = paramsRef.current;
 
     try {
       const rows = await listDetections({ ...params, signal: controller.signal });
+      if (gen !== genRef.current) return; // superseded by a newer cycle
 
       // What counts as "new": ids above the high-water mark. `id` is an integer
       // primary key, so the comparison is exact; `created_at` can tie.
@@ -143,20 +150,27 @@ export function DetectionsFeedProvider({ children }: { children: ReactNode }) {
 
       setLive({ rows, fetchedAt: Date.now(), params, error: null });
     } catch (err) {
-      if (isAbortError(err)) return;
+      if (isAbortError(err) || gen !== genRef.current) return;
       // Keep the rows and their original fetchedAt: stale-but-visible beats a
       // blank table, as long as the UI says which it is.
       setLive((prev) => ({ ...prev, error: toApiError(err) }));
     }
   }, []);
 
-  // Load immediately on mount, on a filter change, and on manual refresh —
-  // deliberately NOT gated on visibility. A page opened in a background tab
-  // must still have rows when the analyst switches to it, and a filter change
-  // must not wait out the remainder of the current tick.
+  // Load immediately on mount and on a filter change — deliberately NOT gated on
+  // visibility. A page opened in a background tab must still have rows when the
+  // analyst switches to it, and a filter change must not wait out the remainder
+  // of the current tick. The cleanup cancels the in-flight request when the
+  // params change (its rows would answer the wrong question) or on unmount.
   useEffect(() => {
     void fetchLive();
-  }, [fetchLive, liveKey, tick]);
+    return () => liveAbortRef.current?.abort();
+  }, [fetchLive, liveKey]);
+
+  // Manual refresh — a separate effect so it never cancels a live request.
+  useEffect(() => {
+    if (tick > 0) void fetchLive();
+  }, [fetchLive, tick]);
 
   // Only the REPEAT is gated: no point burning requests on a tab nobody is
   // looking at, and browsers throttle hidden timers anyway.
@@ -204,8 +218,6 @@ export function DetectionsFeedProvider({ children }: { children: ReactNode }) {
 
     return () => controller.abort();
   }, [liveKey, onDetections, server.offset]);
-
-  useEffect(() => () => liveAbortRef.current?.abort(), []);
 
   // Quarantine acknowledgement: a persisted per-user high-water id. Held in
   // state as well as storage so the bell updates the moment it's cleared.

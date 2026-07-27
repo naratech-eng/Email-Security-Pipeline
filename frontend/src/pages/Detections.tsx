@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DetectionsTable } from '@/components/detections/DetectionsTable';
+import { ExportCsvButton } from '@/components/detections/ExportCsvButton';
 import { FeedStatusBar } from '@/components/detections/FeedStatusBar';
 import { useDetectionsFeed } from '@/feed/DetectionsFeedProvider';
 import { hasClientFilters, visibleRows } from '@/feed/visibleRows';
@@ -80,23 +81,34 @@ export default function Detections() {
           </p>
         </div>
 
-        <div className="flex rounded-lg border border-border bg-surface p-0.5">
-          {SOURCE_TABS.map((tab) => (
-            <button
-              key={tab.label}
-              type="button"
-              aria-pressed={server.source === tab.value}
-              onClick={() => setFilters({ source: tab.value ?? null })}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                server.source === tab.value
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:bg-surface-2',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <ExportCsvButton
+            rows={rows}
+            loadedCount={loadedCount}
+            fetchedAt={snapshot.fetchedAt}
+            server={server}
+            client={client}
+            atWindowEdge={atWindowEdge}
+          />
+
+          <div className="flex rounded-lg border border-border bg-surface p-0.5">
+            {SOURCE_TABS.map((tab) => (
+              <button
+                key={tab.label}
+                type="button"
+                aria-pressed={server.source === tab.value}
+                onClick={() => setFilters({ source: tab.value ?? null })}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  server.source === tab.value
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-muted-foreground hover:bg-surface-2',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
