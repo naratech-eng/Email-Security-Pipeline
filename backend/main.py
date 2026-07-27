@@ -24,7 +24,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import db
-from cognito_auth import cognito_configured, get_config, verify_access_token, TokenError
+from cognito_auth import (
+    cognito_configured,
+    get_config,
+    verify_access_token,
+    TokenBackendError,
+    TokenError,
+)
 from inference import predict_email, predict_url
 from mime_parser import MimeEmail, body_features, normalize_text
 
@@ -122,6 +128,11 @@ def require_auth(request: Request) -> dict:
             raise HTTPException(status_code=401, detail='Unauthorized')
         try:
             claims = verify_access_token(token)
+        except TokenBackendError as e:
+            # Verification could not run (JWKS unreachable). 503, not 401 — the
+            # token may be fine, and telling a signed-in analyst to log in again
+            # would send them in circles against a service outage.
+            raise HTTPException(status_code=503, detail=str(e))
         except TokenError as e:
             raise HTTPException(status_code=401, detail=str(e))
         return {'principal': 'user', 'claims': claims}

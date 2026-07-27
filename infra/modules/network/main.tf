@@ -192,6 +192,14 @@ locals {
     "ecr.api",
     "ecr.dkr",
     "logs",
+    # cognito-idp: the API verifies dashboard access tokens against the user
+    # pool's JWKS (https://cognito-idp.<region>.amazonaws.com/<pool>/.well-known/
+    # jwks.json). With no NAT gateway and no endpoint for this service, that
+    # fetch has no route — the request does not fail, it HANGS, so every
+    # authenticated API call blocks indefinitely while unauthenticated ones
+    # return 401 in milliseconds. Observed 2026-07-27 as a dashboard stuck on
+    # "Loading the feed…" against a healthy-looking service.
+    "cognito-idp",
   ]) : toset([])
 }
 

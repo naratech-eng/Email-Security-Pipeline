@@ -11,6 +11,7 @@ from typing import Optional
 
 import jwt
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError
 
 
 def get_config() -> tuple[Optional[str], str, Optional[str]]:
@@ -34,14 +35,33 @@ def _issuer(pool: str, region: str) -> str:
     return f'https://cognito-idp.{region}.amazonaws.com/{pool}'
 
 
+# How long to wait for the JWKS fetch. PyJWT defaults to no timeout, which turns
+# an unreachable Cognito endpoint (no NAT, missing VPC endpoint, transient DNS)
+# into an indefinitely hanging request instead of an error — every authenticated
+# call blocks and the worker pool fills up. Bounded so the failure is loud.
+JWKS_TIMEOUT_SECONDS = 5
+
+
 # PyJWKClient caches the fetched keys internally; one client per issuer.
 @functools.lru_cache(maxsize=4)
 def _jwks_client(issuer: str) -> PyJWKClient:
-    return PyJWKClient(f'{issuer}/.well-known/jwks.json')
+    return PyJWKClient(
+        f'{issuer}/.well-known/jwks.json',
+        timeout=JWKS_TIMEOUT_SECONDS,
+    )
 
 
 class TokenError(Exception):
-    """Raised when a Cognito token fails verification."""
+    """Raised when a Cognito token fails verification (client's fault → 401)."""
+
+
+class TokenBackendError(Exception):
+    """
+    Raised when verification could not be COMPLETED — the JWKS endpoint was
+    unreachable or timed out. Distinct from TokenError because the caller's
+    token may be perfectly valid: answering 401 here would tell a signed-in
+    analyst to re-authenticate over and over against a service problem.
+    """
 
 
 def verify_access_token(token: str) -> dict:
@@ -57,6 +77,11 @@ def verify_access_token(token: str) -> dict:
     issuer = _issuer(pool, region)
     try:
         signing_key = _jwks_client(issuer).get_signing_key_from_jwt(token)
+    except PyJWKClientConnectionError as e:
+        # Could not reach the JWKS endpoint — a service problem, not a bad token.
+        raise TokenBackendError(f'Could not reach the Cognito JWKS endpoint: {e}') from e
+
+    try:
         claims = jwt.decode(
             token,
             signing_key.key,
