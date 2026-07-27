@@ -159,27 +159,42 @@ export interface DetectionStatsParams {
 }
 
 /**
- * `GET /detections/stats` — the aggregates the wall must not infer from the
- * row feed (a recency-ordered window biases every proportion toward the latest
+ * Why the aggregates are missing, when they are. The caller needs these apart:
+ * they are three different sentences to show an analyst, and only one of them
+ * is worth a retry button.
+ */
+export type StatsOutcome =
+  | { kind: 'ok'; data: DetectionStatsResponse }
+  /** The route isn't deployed yet — this build of the UI is ahead of the API. */
+  | { kind: 'not-deployed' }
+  /** The API answered, but could not read the database (it returns JSON null). */
+  | { kind: 'db-unavailable' };
+
+/**
+ * `GET /detections/stats` — the aggregates the wall must not infer from the row
+ * feed (a recency-ordered window biases every proportion toward the latest
  * burst, and carries no total at all).
  *
- * Returns null in two distinct cases the caller must NOT collapse into zeros:
- * the backend reached Postgres and failed (it answers with JSON null), or the
- * route isn't deployed yet (404, same forward-compatibility rule as
- * `getDetection`). Either way the honest reading is "we don't know", which is
- * different from a real `total: 0` meaning "we looked and found none".
+ * Never returns zeros for a failure. "We don't know" and "we looked and found
+ * none" are different claims, and collapsing them is how an outage ends up
+ * rendered as a quiet night.
  */
 export async function getDetectionStats({
   windowHours = 24,
   signal,
-}: DetectionStatsParams = {}): Promise<DetectionStatsResponse | null> {
+}: DetectionStatsParams = {}): Promise<StatsOutcome> {
   try {
-    return await request<DetectionStatsResponse | null>(
+    const data = await request<DetectionStatsResponse | null>(
       `/detections/stats?window_hours=${windowHours}`,
       { signal },
     );
+    return data ? { kind: 'ok', data } : { kind: 'db-unavailable' };
   } catch (err) {
-    if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return null;
+    // Same forward-compatibility rule as `getDetection`: the UI ships ahead of
+    // the deployed contract and must not present that as a service failure.
+    if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
+      return { kind: 'not-deployed' };
+    }
     throw err;
   }
 }
