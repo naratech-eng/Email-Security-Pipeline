@@ -15,6 +15,7 @@ import type {
   AnalyzeResponse,
   DetectionRecord,
   DetectionSource,
+  DetectionStatsResponse,
   ReviewStatus,
   Verdict,
 } from '@/lib/types';
@@ -27,6 +28,13 @@ export const ACCEPTED_EMAIL_EXTENSIONS = ['.eml', '.txt'] as const;
 
 /** Backend page cap for `GET /detections` (`limit` is validated 1–200). */
 export const MAX_PAGE_SIZE = 200;
+
+/**
+ * Windows `GET /detections/stats` accepts, in hours. Shared with the Overview
+ * range selector so the client and the endpoint cannot drift apart.
+ */
+export const STATS_WINDOWS = [24, 72, 168] as const;
+export type StatsWindow = (typeof STATS_WINDOWS)[number];
 
 /** A failed API call. `status` is 0 when the request never reached the service. */
 export class ApiError extends Error {
@@ -143,6 +151,37 @@ export function listDetections({
   if (verdict) query.set('verdict', verdict);
   if (source) query.set('source', source);
   return request<DetectionRecord[]>(`/detections?${query}`, { signal });
+}
+
+export interface DetectionStatsParams {
+  windowHours?: StatsWindow;
+  signal?: AbortSignal;
+}
+
+/**
+ * `GET /detections/stats` — the aggregates the wall must not infer from the
+ * row feed (a recency-ordered window biases every proportion toward the latest
+ * burst, and carries no total at all).
+ *
+ * Returns null in two distinct cases the caller must NOT collapse into zeros:
+ * the backend reached Postgres and failed (it answers with JSON null), or the
+ * route isn't deployed yet (404, same forward-compatibility rule as
+ * `getDetection`). Either way the honest reading is "we don't know", which is
+ * different from a real `total: 0` meaning "we looked and found none".
+ */
+export async function getDetectionStats({
+  windowHours = 24,
+  signal,
+}: DetectionStatsParams = {}): Promise<DetectionStatsResponse | null> {
+  try {
+    return await request<DetectionStatsResponse | null>(
+      `/detections/stats?window_hours=${windowHours}`,
+      { signal },
+    );
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return null;
+    throw err;
+  }
 }
 
 /** How many list pages `getDetection` will walk before giving up. */
