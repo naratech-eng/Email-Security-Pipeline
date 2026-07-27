@@ -15,6 +15,7 @@ import type {
   AnalyzeResponse,
   DetectionRecord,
   DetectionSource,
+  DetectionStatsResponse,
   ReviewStatus,
   Verdict,
 } from '@/lib/types';
@@ -27,6 +28,13 @@ export const ACCEPTED_EMAIL_EXTENSIONS = ['.eml', '.txt'] as const;
 
 /** Backend page cap for `GET /detections` (`limit` is validated 1–200). */
 export const MAX_PAGE_SIZE = 200;
+
+/**
+ * Windows `GET /detections/stats` accepts, in hours. Shared with the Overview
+ * range selector so the client and the endpoint cannot drift apart.
+ */
+export const STATS_WINDOWS = [24, 72, 168] as const;
+export type StatsWindow = (typeof STATS_WINDOWS)[number];
 
 /** A failed API call. `status` is 0 when the request never reached the service. */
 export class ApiError extends Error {
@@ -143,6 +151,52 @@ export function listDetections({
   if (verdict) query.set('verdict', verdict);
   if (source) query.set('source', source);
   return request<DetectionRecord[]>(`/detections?${query}`, { signal });
+}
+
+export interface DetectionStatsParams {
+  windowHours?: StatsWindow;
+  signal?: AbortSignal;
+}
+
+/**
+ * Why the aggregates are missing, when they are. The caller needs these apart:
+ * they are three different sentences to show an analyst, and only one of them
+ * is worth a retry button.
+ */
+export type StatsOutcome =
+  | { kind: 'ok'; data: DetectionStatsResponse }
+  /** The route isn't deployed yet — this build of the UI is ahead of the API. */
+  | { kind: 'not-deployed' }
+  /** The API answered, but could not read the database (it returns JSON null). */
+  | { kind: 'db-unavailable' };
+
+/**
+ * `GET /detections/stats` — the aggregates the wall must not infer from the row
+ * feed (a recency-ordered window biases every proportion toward the latest
+ * burst, and carries no total at all).
+ *
+ * Never returns zeros for a failure. "We don't know" and "we looked and found
+ * none" are different claims, and collapsing them is how an outage ends up
+ * rendered as a quiet night.
+ */
+export async function getDetectionStats({
+  windowHours = 24,
+  signal,
+}: DetectionStatsParams = {}): Promise<StatsOutcome> {
+  try {
+    const data = await request<DetectionStatsResponse | null>(
+      `/detections/stats?window_hours=${windowHours}`,
+      { signal },
+    );
+    return data ? { kind: 'ok', data } : { kind: 'db-unavailable' };
+  } catch (err) {
+    // Same forward-compatibility rule as `getDetection`: the UI ships ahead of
+    // the deployed contract and must not present that as a service failure.
+    if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
+      return { kind: 'not-deployed' };
+    }
+    throw err;
+  }
 }
 
 /** How many list pages `getDetection` will walk before giving up. */
