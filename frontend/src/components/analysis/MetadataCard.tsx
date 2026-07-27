@@ -1,5 +1,6 @@
 import { defangText } from '@/lib/defang';
 import { formatDateTime } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { AnalysisResult } from '@/lib/types';
 
 /**
@@ -8,11 +9,21 @@ import type { AnalysisResult } from '@/lib/types';
  * text. Message bodies are deliberately absent: the pipeline never stores them.
  */
 export function MetadataCard({ metadata }: { metadata: AnalysisResult['metadata'] }) {
-  const rows: [string, string][] = [
-    ['From', metadata.fromAddr ? defangText(metadata.fromAddr) : '—'],
-    ['To', metadata.toAddr ? defangText(metadata.toAddr) : '—'],
-    ['Subject', metadata.subject || '—'],
-    ['Date', formatDateTime(metadata.date)],
+  // Addresses wrap instead of truncating — a lookalike domain
+  // (micros0ft-verify[.]com) is the whole tell, and it lives at the end.
+  const rows: { label: string; value: string; wrap?: boolean }[] = [
+    {
+      label: 'From',
+      value: metadata.fromAddr ? defangText(metadata.fromAddr) : '—',
+      wrap: true,
+    },
+    {
+      label: 'To',
+      value: metadata.toAddr ? defangText(metadata.toAddr) : '—',
+      wrap: true,
+    },
+    { label: 'Subject', value: metadata.subject || '—' },
+    { label: 'Date', value: formatDateTime(metadata.date) },
   ];
 
   return (
@@ -20,10 +31,16 @@ export function MetadataCard({ metadata }: { metadata: AnalysisResult['metadata'
       <h3 className="text-sm font-semibold text-foreground">Email metadata</h3>
 
       <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-        {rows.map(([label, value]) => (
+        {rows.map(({ label, value, wrap }) => (
           <div key={label} className="min-w-0">
             <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="truncate font-mono text-sm text-foreground" title={value}>
+            <dd
+              className={cn(
+                'font-mono text-sm text-foreground',
+                wrap ? 'break-all' : 'truncate',
+              )}
+              title={value}
+            >
               {value}
             </dd>
           </div>
