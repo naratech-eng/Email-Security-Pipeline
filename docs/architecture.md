@@ -163,6 +163,7 @@ See [ADR-0003: Model strategy](adr/0003-model-strategy.md).
 | `/score` | POST | Cognito JWT (dashboard) or signed token (milter) | Body: full email JSON. Returns `{verdict, score, top_features}` |
 | `/score-url` | POST | same | Body: `{url}`. Returns `{verdict, score}` |
 | `/detections` | GET | Cognito JWT | List flagged emails with filters |
+| `/detections/stats` | GET | Cognito JWT | Overview aggregates over `window_hours` (24/72/168, default 24): `total`, `by_verdict`, `by_source`, a zero-filled `series` on absolute hour/day boundaries, plus `newest_at` / `newest_server_at` (**not** window-bounded — they drive the "mail pipeline quiet" rule) and the server's `generated_at`. Returns `null` when the database is unreachable, so the dashboard can distinguish "none found" from "don't know" |
 | `/detections/{id}` | GET | Cognito JWT | Detail view |
 | `/metrics` | GET | private only | Prometheus-compatible (optional) |
 
