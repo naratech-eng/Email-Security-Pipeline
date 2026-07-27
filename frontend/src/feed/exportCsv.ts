@@ -30,6 +30,10 @@ const COLUMNS = [
   'from_addr',
   'to_addr',
   'source',
+  // Exported alongside `source` on purpose: an export that keeps the feed
+  // label but drops who submitted it is the easiest way for the upload/server
+  // separation to be lost once the data leaves the dashboard.
+  'submitted_by',
   'num_urls',
   'attachment_count',
   'email_score',

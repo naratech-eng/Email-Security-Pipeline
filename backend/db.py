@@ -48,11 +48,11 @@ def _resolve_db_url() -> Optional[str]:
 
 _INSERT_SQL = """
 INSERT INTO detections (
-    source, submitted_by, verdict, likelihood, summary, remediation,
+    source, submitted_by, submitted_by_sub, verdict, likelihood, summary, remediation,
     from_addr, to_addr, subject, email_date, num_urls, attachment_count,
     email_score, email_model, email_reason, email_features, urls
 ) VALUES (
-    %(source)s, %(submitted_by)s, %(verdict)s, %(likelihood)s, %(summary)s, %(remediation)s,
+    %(source)s, %(submitted_by)s, %(submitted_by_sub)s, %(verdict)s, %(likelihood)s, %(summary)s, %(remediation)s,
     %(from_addr)s, %(to_addr)s, %(subject)s, %(email_date)s, %(num_urls)s, %(attachment_count)s,
     %(email_score)s, %(email_model)s, %(email_reason)s, %(email_features)s, %(urls)s
 )
@@ -67,6 +67,9 @@ def insert_detection(row: dict) -> Optional[int]:
         return None
     try:
         params = dict(row)
+        # Older callers don't pass the immutable-identity column; the schema
+        # allows NULL there, so default rather than KeyError on them.
+        params.setdefault('submitted_by_sub', None)
         params['email_features'] = (
             json.dumps(row['email_features']) if row.get('email_features') is not None else None
         )

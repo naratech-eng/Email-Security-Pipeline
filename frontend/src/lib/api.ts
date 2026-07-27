@@ -214,8 +214,6 @@ export interface AnalyzeInput {
   text?: string;
   /** Uploaded `.eml` / `.txt`. Mutually exclusive with `text`. */
   file?: File;
-  /** Cognito username of the submitter, recorded on the persisted detection. */
-  submittedBy?: string | null;
   signal?: AbortSignal;
 }
 
@@ -225,14 +223,16 @@ function utf8Bytes(text: string): number {
 }
 
 /**
- * `POST /analyze/email` (multipart). Always `source=upload` — `server` belongs to
- * the mail content filter, never the dashboard. Enforces the exactly-one-input
- * and 1 MB rules client-side so an obviously bad payload never costs a cold start.
+ * `POST /analyze/email` (multipart). Sends ONLY the payload: `source` and
+ * `submitted_by` are derived server-side from the verified access token, so the
+ * dashboard cannot write into the mail-server feed or submit as someone else.
+ * (This used to send both as form fields, which made the separation a client
+ * convention rather than a control.) Enforces the exactly-one-input and 1 MB
+ * rules client-side so an obviously bad payload never costs a cold start.
  */
 export function analyzeEmail({
   text,
   file,
-  submittedBy,
   signal,
 }: AnalyzeInput): Promise<AnalyzeResponse> {
   const pasted = text?.trim();
@@ -260,8 +260,6 @@ export function analyzeEmail({
   const form = new FormData();
   if (file) form.set('file', file, file.name);
   else form.set('text', pasted!);
-  form.set('source', 'upload');
-  if (submittedBy) form.set('submitted_by', submittedBy);
 
   // No Content-Type header — the browser sets the multipart boundary.
   return request<AnalyzeResponse>('/analyze/email', { method: 'POST', body: form, signal });

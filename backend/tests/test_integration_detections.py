@@ -67,24 +67,50 @@ def test_db_insert_and_list_round_trip():
     assert results[0]['urls'] == [{'url': 'x'}]
 
 
-def test_analyze_email_persists_with_source_and_submitted_by():
-    r = client.post('/analyze/email', data={'text': PHISHING_EMAIL, 'source': 'upload', 'submitted_by': 'klara'})
+def test_analyze_email_persists_with_derived_provenance():
+    """
+    source/submitted_by come from the authenticated principal, never the body.
+    Under the test client neither Cognito nor JWT_SIGNING_KEY is configured, so
+    require_auth yields the 'anonymous' principal -> the local-dev upload row.
+    """
+    r = client.post('/analyze/email', data={'text': PHISHING_EMAIL})
     assert r.status_code == 200
     assert 'remediation' in r.json()
 
     rows = db.list_detections(source='upload')
     assert len(rows) == 1
-    assert rows[0]['submitted_by'] == 'klara'
+    assert rows[0]['submitted_by'] == 'local-dev'
     assert rows[0]['verdict'] in ('flag', 'quarantine')
     assert rows[0]['remediation']
 
 
-def test_analyze_email_server_source_has_no_submitted_by():
-    client.post('/analyze/email', data={'text': BENIGN_EMAIL, 'source': 'server'})
-    rows = db.list_detections(source='server')
+def test_analyze_email_ignores_client_supplied_provenance():
+    """
+    Regression guard for the spoofing vector this replaced: `source` and
+    `submitted_by` used to be Form fields, so any caller could write into the
+    mail-server feed or attribute a detection to someone else. Both are now
+    ignored -- sending them must not change where the row lands or who it names.
+    """
+    r = client.post(
+        '/analyze/email',
+        data={'text': BENIGN_EMAIL, 'source': 'server', 'submitted_by': 'someone-else'},
+    )
+    assert r.status_code == 200
+
+    # Claimed 'server', but the principal is anonymous -> still an upload row.
+    assert db.list_detections(source='server') == []
+    rows = db.list_detections(source='upload')
     assert len(rows) == 1
-    assert rows[0]['submitted_by'] is None
-    assert rows[0]['verdict'] == 'clean'
+    assert rows[0]['submitted_by'] == 'local-dev'
+
+
+def test_analyze_response_exposes_detection_id():
+    """The dashboard deep-links the live result to its stored row."""
+    r = client.post('/analyze/email', data={'text': BENIGN_EMAIL})
+    assert r.status_code == 200
+    detection_id = r.json()['detection_id']
+    assert detection_id is not None
+    assert db.list_detections()[0]['id'] == detection_id
 
 
 def test_detections_endpoint_filters_by_verdict():
