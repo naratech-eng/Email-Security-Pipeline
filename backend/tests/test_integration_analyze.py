@@ -113,3 +113,91 @@ def test_analyze_requires_auth_when_configured(monkeypatch):
         headers={"Authorization": "Bearer test-secret"},
     )
     assert r.status_code == 200
+
+
+# --------------------------------------------------------------------- #
+# Provenance — source/submitted_by come from WHO called, not what they sent.
+# --------------------------------------------------------------------- #
+
+
+def _captured_rows(monkeypatch):
+    """Capture what would be persisted, without needing a database."""
+    import main
+
+    rows = []
+
+    def fake_insert(row):
+        rows.append(row)
+        return 4242
+
+    monkeypatch.setattr(main.db, "insert_detection", fake_insert)
+    return rows
+
+
+def test_analyst_cannot_write_into_the_server_feed(monkeypatch):
+    """
+    The negative case this whole change exists for: an authenticated dashboard
+    user posting source=server must still land in the upload feed, attributed
+    to them. Before provenance was derived server-side this test fails --
+    the body won and the row joined the mail-server feed unattributably.
+    """
+    import main
+
+    rows = _captured_rows(monkeypatch)
+    monkeypatch.setattr(main, "cognito_configured", lambda: True)
+    monkeypatch.setattr(
+        main,
+        "verify_access_token",
+        lambda token: {"sub": "sub-123", "username": "analyst@example.com"},
+    )
+
+    r = client.post(
+        "/analyze/email",
+        data={"text": BENIGN_EML, "source": "server", "submitted_by": "someone-else"},
+        headers={"Authorization": "Bearer any-cognito-token"},
+    )
+
+    assert r.status_code == 200
+    assert len(rows) == 1
+    assert rows[0]["source"] == "upload"
+    assert rows[0]["submitted_by"] == "analyst@example.com"
+    assert rows[0]["submitted_by_sub"] == "sub-123"
+
+
+def test_service_principal_writes_the_server_feed(monkeypatch):
+    """The mail filter still produces server rows, and still sends its now
+    redundant source=server part — which must simply be ignored."""
+    import main
+
+    rows = _captured_rows(monkeypatch)
+    monkeypatch.setenv("JWT_SIGNING_KEY", "test-secret")
+
+    r = client.post(
+        "/analyze/email",
+        data={"text": BENIGN_EML, "source": "server"},
+        headers={"Authorization": "Bearer test-secret"},
+    )
+
+    assert r.status_code == 200
+    assert rows[0]["source"] == "server"
+    # No human behind mail delivery, and the CHECK constraint requires NULL.
+    assert rows[0]["submitted_by"] is None
+
+
+def test_analyze_returns_persisted_detection_id(monkeypatch):
+    """Without the id the dashboard can't deep-link or offer review controls."""
+    _captured_rows(monkeypatch)
+    r = client.post("/analyze/email", data={"text": BENIGN_EML})
+    assert r.status_code == 200
+    assert r.json()["detection_id"] == 4242
+
+
+def test_detection_id_is_null_when_persistence_fails_open(monkeypatch):
+    """Persistence failing open must not fail the analysis — but the response
+    has to admit there's no stored row, so the UI can hide the link."""
+    import main
+
+    monkeypatch.setattr(main.db, "insert_detection", lambda row: None)
+    r = client.post("/analyze/email", data={"text": BENIGN_EML})
+    assert r.status_code == 200
+    assert r.json()["detection_id"] is None
