@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6B7280"/>
+    </marker>
+    <marker id="arrowP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7C3AED"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+  <text x="60" y="70" font-size="40" font-weight="bold" fill="#2E1065">Workflow — Phase A: Upload &amp; Detect</text>
+  <text x="60" y="112" font-size="26" fill="#6B7280">MVP demo path — works without any mail server</text>
+  <rect x="1310" y="45" width="230" height="60" rx="30" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="1425" y="85" font-size="28" font-weight="bold" fill="#6D28D9" text-anchor="middle">&lt; 1 s p95</text>
+
+  <!-- Step boxes -->
+  <g>
+    <rect x="70" y="260" width="270" height="200" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+    <circle cx="105" cy="295" r="24" fill="#7C3AED"/><text x="105" y="305" font-size="26" font-weight="bold" fill="#FFF" text-anchor="middle">1</text>
+    <text x="205" y="340" font-size="28" font-weight="bold" fill="#2E1065" text-anchor="middle">Operator</text>
+    <text x="205" y="378" font-size="23" fill="#52525B" text-anchor="middle">pastes raw email</text>
+    <text x="205" y="410" font-size="23" fill="#52525B" text-anchor="middle">or uploads .eml</text>
+  </g>
+  <g>
+    <rect x="400" y="260" width="270" height="200" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+    <circle cx="435" cy="295" r="24" fill="#7C3AED"/><text x="435" y="305" font-size="26" font-weight="bold" fill="#FFF" text-anchor="middle">2</text>
+    <text x="535" y="340" font-size="28" font-weight="bold" fill="#2E1065" text-anchor="middle">Dashboard</text>
+    <text x="535" y="378" font-size="23" fill="#52525B" text-anchor="middle">POST /score</text>
+    <text x="535" y="410" font-size="23" fill="#52525B" text-anchor="middle">Cognito JWT · HTTPS</text>
+  </g>
+  <g>
+    <rect x="730" y="260" width="270" height="200" rx="14" fill="#FCE7F3" stroke="#DB2777" stroke-width="3"/>
+    <circle cx="765" cy="295" r="24" fill="#DB2777"/><text x="765" y="305" font-size="26" font-weight="bold" fill="#FFF" text-anchor="middle">3</text>
+    <text x="865" y="340" font-size="28" font-weight="bold" fill="#2E1065" text-anchor="middle">Public ALB</text>
+    <text x="865" y="378" font-size="23" fill="#52525B" text-anchor="middle">TLS termination</text>
+    <text x="865" y="410" font-size="23" fill="#52525B" text-anchor="middle">WAF rules</text>
+  </g>
+  <g>
+    <rect x="1060" y="260" width="270" height="200" rx="14" fill="#EDE9FE" stroke="#6D28D9" stroke-width="4"/>
+    <circle cx="1095" cy="295" r="24" fill="#6D28D9"/><text x="1095" y="305" font-size="26" font-weight="bold" fill="#FFF" text-anchor="middle">4</text>
+    <text x="1195" y="336" font-size="28" font-weight="bold" fill="#2E1065" text-anchor="middle">FastAPI · ECS</text>
+    <text x="1195" y="372" font-size="23" fill="#52525B" text-anchor="middle">parse email</text>
+    <text x="1195" y="404" font-size="23" fill="#52525B" text-anchor="middle">extract features</text>
+    <text x="1195" y="436" font-size="23" fill="#52525B" text-anchor="middle">classify (SVC + CNN)</text>
+  </g>
+  <g>
+    <path d="M 1400 430 a 80 20 0 0 0 160 0 v -90 a 80 20 0 0 0 -160 0 z" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <ellipse cx="1480" cy="340" rx="80" ry="20" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="3"/>
+    <circle cx="1425" cy="290" r="24" fill="#8B5CF6"/><text x="1425" y="300" font-size="26" font-weight="bold" fill="#FFF" text-anchor="middle">5</text>
+    <text x="1480" y="492" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">RDS Postgres</text>
+    <text x="1480" y="524" font-size="23" fill="#52525B" text-anchor="middle">source = upload</text>
+  </g>
+
+  <!-- Flow arrows -->
+  <line x1="340" y1="360" x2="392" y2="360" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="670" y1="360" x2="722" y2="360" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1000" y1="360" x2="1052" y2="360" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1330" y1="360" x2="1394" y2="360" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- Return path -->
+  <path d="M 1195 468 L 1195 645 L 275 645 L 275 585" fill="none" stroke="#7C3AED" stroke-width="4" stroke-dasharray="14 10" marker-end="url(#arrowP)"/>
+  <circle cx="700" cy="645" r="24" fill="#7C3AED"/><text x="700" y="655" font-size="26" font-weight="bold" fill="#FFF" text-anchor="middle">6</text>
+
+  <!-- Verdict card -->
+  <rect x="110" y="580" width="330" height="240" rx="14" fill="#FFFFFF" stroke="#7C3AED" stroke-width="3"/>
+  <rect x="110" y="580" width="330" height="56" rx="14" fill="#7C3AED"/>
+  <text x="275" y="618" font-size="26" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Verdict returned</text>
+  <text x="145" y="682" font-size="24" fill="#2E1065">verdict:  <tspan font-weight="bold" fill="#BE185D">quarantine</tspan></text>
+  <text x="145" y="720" font-size="24" fill="#2E1065">score:  <tspan font-weight="bold">0.97</tspan></text>
+  <text x="145" y="758" font-size="24" fill="#2E1065">top_features [...]</text>
+  <text x="145" y="796" font-size="24" fill="#2E1065">urls [...]</text>
+
+  <text x="850" y="720" font-size="26" fill="#52525B" text-anchor="middle">JSON response rendered in the dashboard —</text>
+  <text x="850" y="756" font-size="26" fill="#52525B" text-anchor="middle">operator sees <tspan font-weight="bold" fill="#BE185D">why</tspan> it was flagged, not just a red badge</text>
+</svg>

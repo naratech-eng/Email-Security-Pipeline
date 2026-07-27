@@ -8,28 +8,7 @@ package_upgrade: true
 packages:
   - epel-release
 
-# postfix, dovecot, swaks, s-nail installed in runcmd after EPEL is available
-
 write_files:
-  - path: /etc/postfix/main.cf.d/esp.cf
-    content: |
-      # Email Security Pipeline — Postfix config
-      myhostname = ${mail_hostname}
-      mydomain   = ${mail_domain}
-      myorigin   = $mydomain
-      inet_interfaces = all
-      inet_protocols = ipv4
-      mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain
-      mynetworks = 127.0.0.0/8
-      relayhost =
-      smtpd_banner = $myhostname ESMTP
-      # Reject open relay
-      smtpd_recipient_restrictions =
-        permit_mynetworks,
-        reject_unauth_destination
-      # Dovecot LMTP delivery
-      mailbox_transport = lmtp:unix:private/dovecot-lmtp
-
   - path: /etc/dovecot/conf.d/10-mail.conf
     content: |
       mail_location = maildir:~/Maildir
@@ -37,11 +16,73 @@ write_files:
         inbox = yes
       }
 
-runcmd:
-  # Install packages after EPEL is available (s-nail replaces mailx in Rocky Linux 9)
-  - dnf install -y postfix dovecot swaks s-nail
+  # M7-T5: quarantine-verdict mail -> Quarantine mailbox, not INBOX.
+  - path: /etc/dovecot/conf.d/91-esp-sieve.conf
+    content: |
+      plugin {
+        sieve = ~/.dovecot.sieve
+        sieve_before = /etc/dovecot/sieve/quarantine.sieve
+      }
+      protocol lmtp {
+        mail_plugins = $mail_plugins sieve
+      }
 
-  # Apply Postfix config — use Terraform-rendered values directly (no shell var expansion)
+  - path: /etc/dovecot/sieve/quarantine.sieve
+    content: |
+      require ["fileinto", "mailbox"];
+      if header :contains "X-Phishing-Verdict" "quarantine" {
+        fileinto :create "Quarantine";
+        stop;
+      }
+
+  # M7-T6: Dovecot SASL socket for Postfix's submission service (587).
+  - path: /etc/dovecot/conf.d/92-esp-postfix-auth.conf
+    content: |
+      service auth {
+        unix_listener /var/spool/postfix/private/auth {
+          mode = 0666
+          user = postfix
+          group = postfix
+        }
+      }
+
+  # LMTP, not Postfix's `local`: `local` writes mbox to /var/spool/mail/$user,
+  # which Dovecot (maildir:~/Maildir) cannot see, so IMAP shows an empty inbox.
+  # Sieve also only runs under LMTP. auth_username_format strips the domain —
+  # PAM users are "klara", LMTP hands over "klara@mail.naratech.xyz".
+  - path: /etc/dovecot/conf.d/93-esp-lmtp.conf
+    content: |
+      protocols = imap lmtp sieve
+      auth_username_format = %Ln
+      service lmtp {
+        unix_listener /var/spool/postfix/private/dovecot-lmtp {
+          mode = 0600
+          user = postfix
+          group = postfix
+        }
+      }
+
+  # The dovecot RPM ships a placeholder cert (CN=imap.example.com); clients
+  # then fail the handshake on a hostname mismatch, surfacing only as an opaque
+  # "cannot connect". Use the same cert Postfix does (real SAN, see runcmd).
+  - path: /etc/dovecot/conf.d/94-esp-ssl.conf
+    content: |
+      ssl = required
+      ssl_cert = </etc/pki/postfix/postfix.crt
+      ssl_key = </etc/pki/postfix/postfix.key
+      ssl_min_protocol = TLSv1.2
+
+runcmd:
+  # Rocky's AMI ships neither SSM Agent nor EC2 Instance Connect; install first.
+  - dnf install -y https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm || true
+  - systemctl enable --now amazon-ssm-agent || true
+  - dnf install -y ec2-instance-connect || true
+
+  # dovecot-pigeonhole = Sieve (M7-T5); unzip = for the AWS CLI installer;
+  # cyrus-sasl-plain = SASL PLAIN for the *client* side, required to authenticate
+  # to the SES relay — without it Postfix reports "no mechanism available".
+  - dnf install -y postfix dovecot dovecot-pigeonhole swaks s-nail unzip cyrus-sasl-plain
+
   - postconf -e "myhostname = ${mail_hostname}"
   - postconf -e "mydomain = ${mail_domain}"
   - postconf -e "myorigin = ${mail_domain}"
@@ -49,22 +90,142 @@ runcmd:
   - postconf -e "mydestination = ${mail_hostname}, localhost.${mail_domain}, localhost, ${mail_domain}"
   - postconf -e "mynetworks = 127.0.0.0/8"
   - postconf -e "smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination"
+  # Rocky 9's main.cf has no `include` for main.cf.d, so every setting must go
+  # through postconf here — a drop-in file there is silently ignored.
+  - postconf -e "mailbox_transport = lmtp:unix:private/dovecot-lmtp"
   - newaliases
 
-  # Create two test mail accounts
+  # Self-signed fallback, generated first so TLS works even if certbot fails.
+  # subjectAltName is mandatory: clients ignore CN and reject a cert with no SAN.
+  - mkdir -p /etc/pki/postfix
+  - openssl req -x509 -nodes -newkey rsa:2048 -days 825 -keyout /etc/pki/postfix/postfix.key -out /etc/pki/postfix/postfix.crt -subj "/CN=${mail_hostname}" -addext "subjectAltName=DNS:${mail_hostname},DNS:${mail_domain}"
+  # Dovecot runs as its own user and must be able to read the shared key.
+  - chgrp dovecot /etc/pki/postfix/postfix.key
+  - chmod 640 /etc/pki/postfix/postfix.key
+  - postconf -e "smtpd_tls_cert_file = /etc/pki/postfix/postfix.crt"
+  - postconf -e "smtpd_tls_key_file = /etc/pki/postfix/postfix.key"
+  - postconf -e "smtpd_tls_security_level = may"
+
+  # M7-T6: authenticated SMTP submission (587) — clients send through us,
+  # port 25 stays receive-only. All SASL/relay logic scoped via -o here.
+  - |
+    cat >> /etc/postfix/master.cf << 'MASTERCF'
+
+    submission inet n - n - - smtpd
+      -o syslog_name=postfix/submission
+      -o smtpd_tls_security_level=encrypt
+      -o smtpd_sasl_auth_enable=yes
+      -o smtpd_sasl_type=dovecot
+      -o smtpd_sasl_path=private/auth
+      -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+      -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+      -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+      -o milter_macro_daemon_name=ORIGINATING
+    MASTERCF
+
   - useradd -m testuser1 || true
   - useradd -m testuser2 || true
   - echo "testuser1:ChangeMe123!" | chpasswd
   - echo "testuser2:ChangeMe123!" | chpasswd
 
-  # Enable and start services
-  - systemctl enable --now postfix dovecot
+  # M7-T6 named accounts for external client testing.
+  - useradd -m klara || true
+  - useradd -m john || true
+  - useradd -m michael || true
+  - echo "klara:Klara2026!" | chpasswd
+  - echo "john:John2026!" | chpasswd
+  - echo "michael:Michael2026!" | chpasswd
 
-  # Smoke test — send a local test email
+  # Official installer — AWS CLI isn't reliably packaged for RHEL9 via EPEL.
+  # Everything below that fetches from S3 or Secrets Manager depends on this,
+  # so it must stay above all of them.
+  - curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  - unzip -q /tmp/awscliv2.zip -d /tmp
+  - /tmp/aws/install
+  - rm -rf /tmp/awscliv2.zip /tmp/aws
+
+  # M7-T17: real cert, fetched from S3 like phishing_filter.py -- installs
+  # certbot, issues via DNS-01/Route53, and repoints the renewal timer if the
+  # pip fallback fired. See files/setup-certbot.sh for the full rationale.
+  # Runs after the AWS CLI install above because it needs `aws s3 cp`. Failure
+  # is non-fatal: the self-signed cert generated earlier stays in place, and
+  # postfix/dovecot are not started until the end of runcmd either way.
+  - >-
+    aws s3 cp s3://${scripts_bucket}/setup-certbot.sh /tmp/setup-certbot.sh --region us-east-1
+    && sh /tmp/setup-certbot.sh ${mail_hostname} ${certbot_email}
+    || echo "setup-certbot.sh fetch/run failed, staying on the self-signed cert"
+
+  - useradd -r -s /sbin/nologin filter || true
+
+  # Fetch the JWT key once at boot; content_filter reads it from disk.
+  - mkdir -p /etc/esp
+  - >-
+    aws secretsmanager get-secret-value
+    --secret-id ${jwt_signing_key_secret_arn}
+    --region us-east-1
+    --query SecretString --output text > /etc/esp/api-token
+  - chmod 600 /etc/esp/api-token
+  - chown filter:filter /etc/esp/api-token
+
+  # Script lives in S3: with the M7-T16 circuit breaker it no longer fits in
+  # user_data. Reads its target from /etc/esp/api-url so the object is generic.
+  - echo "http://${api_internal_url}" > /etc/esp/api-url
+  # Fetch failure falls back to a pass-through that re-injects unscored: a
+  # missing script would defer ALL mail, the one outcome we must never produce.
+  - |
+    aws s3 cp s3://${scripts_bucket}/phishing_filter.py /usr/local/bin/phishing_filter.py --region us-east-1 || \
+    printf '#!/usr/bin/env python3\nimport subprocess,sys\na=sys.argv[1:]\ns=a[a.index("-f")+1]\nr=a[a.index("--")+1:]\nsys.stderr.write("phishing_filter: S3 fetch failed at boot, passing mail through unscored\\n")\nsys.exit(subprocess.run(["/usr/sbin/sendmail","-G","-i","-f",s,"--"]+r,input=sys.stdin.buffer.read()).returncode)\n' > /usr/local/bin/phishing_filter.py
+  - chmod 0755 /usr/local/bin/phishing_filter.py
+  # Circuit-breaker state, owned by the filter user; seeded with valid JSON.
+  - echo '{"failures":0,"opened_at":0}' > /etc/esp/circuit-state.json
+  - chown filter:filter /etc/esp /etc/esp/circuit-state.json
+  - chmod 0644 /etc/esp/circuit-state.json
+
+  # M7-T6: AWS blocks outbound :25 from EC2, so external mail relays via SES
+  # on :587, which also DKIM-signs it. See modules/ses_relay.
+  - >-
+    aws secretsmanager get-secret-value
+    --secret-id ${ses_smtp_secret_arn}
+    --region us-east-1
+    --query SecretString --output text > /tmp/ses.json
+  - python3 -c "import json;d=json.load(open('/tmp/ses.json'));print('${ses_relay_host} %s:%s'%(d['username'],d['password']))" > /etc/postfix/sasl_passwd
+  - rm -f /tmp/ses.json
+  - postmap /etc/postfix/sasl_passwd
+  - chmod 600 /etc/postfix/sasl_passwd /etc/postfix/sasl_passwd.db
+  - postconf -e "relayhost = ${ses_relay_host}"
+  - postconf -e "smtp_sasl_auth_enable = yes"
+  - postconf -e "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
+  - postconf -e "smtp_sasl_security_options = noanonymous"
+  - postconf -e "smtp_tls_security_level = encrypt"
+
+  # Scoped to smtp+submission, never global (global refilters the filter's own
+  # pickup re-injection forever). Submission included so internal->internal
+  # and outbound mail get scanned too, not just inbound from the MX.
+  # $${sender}/$${recipient} are Postfix placeholders, escaped from templatefile().
+  - postconf -P 'smtp/inet/content_filter=phishing-filter:dummy'
+  - postconf -P 'submission/inet/content_filter=phishing-filter:dummy'
+  - |
+    cat >> /etc/postfix/master.cf << 'MASTERCF'
+
+    phishing-filter unix - n n - 10 pipe
+      flags=Rq user=filter null_sender=
+      argv=/usr/local/bin/phishing_filter.py -f $${sender} -- $${recipient}
+    MASTERCF
+
+  - sievec /etc/dovecot/sieve/quarantine.sieve
+
+  - systemctl enable --now postfix dovecot
+  - systemctl restart postfix dovecot
+
   - swaks --to testuser2@localhost --from testuser1@localhost --server 127.0.0.1 --helo ${mail_hostname} || true
 
 final_message: |
   Rocky Linux 9 mail server bootstrap complete.
-  Postfix and Dovecot are running.
-  Test accounts: testuser1, testuser2 (password: ChangeMe123!)
+  Postfix and Dovecot are running, content_filter active (M7-T4/T5).
+  Local test accounts: testuser1, testuser2 (password: ChangeMe123!)
+  Named accounts: klara@mail.naratech.xyz, john@mail.naratech.xyz, michael@mail.naratech.xyz
+    (passwords: Klara2026! / John2026! / Michael2026! — change on first login)
+  IMAP: 993 (SSL/TLS) or 143 (STARTTLS). SMTP submission: 587 (STARTTLS, SASL).
+  TLS: Let's Encrypt if issued, else self-signed. Check:
+    openssl s_client -connect ${mail_hostname}:993 | head -3
   Run: swaks --to testuser2@localhost --from testuser1@localhost

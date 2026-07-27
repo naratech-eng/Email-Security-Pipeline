@@ -162,6 +162,104 @@ resource "aws_route_table_association" "private" {
 }
 
 # --------------------------------------------------------------------------- #
+# VPC Endpoints — private-subnet access to AWS services without a NAT gateway.
+# Fargate tasks in the private subnets need Secrets Manager (env var secrets),
+# ECR (image pull), and CloudWatch Logs (awslogs driver); S3 gateway endpoint
+# covers model artifact downloads. Single-AZ interface endpoints (first
+# private subnet only) mirrors the existing single-AZ NAT gateway's dev-cost
+# tradeoff above — not HA, fine for a lab environment.
+# --------------------------------------------------------------------------- #
+resource "aws_security_group" "vpc_endpoints" {
+  #checkov:skip=CKV_AWS_382: No egress needed — endpoint ENIs only receive from in-VPC clients, they don't initiate outbound traffic
+  name        = "${var.project}-sg-vpc-endpoints"
+  description = "Interface VPC endpoints: allow HTTPS from within the VPC"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "HTTPS from VPC (ECS tasks, etc.)"
+  }
+
+  tags = { Name = "${var.project}-sg-vpc-endpoints", Project = var.project }
+}
+
+locals {
+  interface_endpoint_services = var.enable_vpc_endpoints ? toset([
+    "secretsmanager",
+    "ecr.api",
+    "ecr.dkr",
+    "logs",
+    # cognito-idp: the API verifies dashboard access tokens against the user
+    # pool's JWKS (https://cognito-idp.<region>.amazonaws.com/<pool>/.well-known/
+    # jwks.json). With no NAT gateway and no endpoint for this service, that
+    # fetch has no route — the request does not fail, it HANGS, so every
+    # authenticated API call blocks indefinitely while unauthenticated ones
+    # return 401 in milliseconds. Observed 2026-07-27 as a dashboard stuck on
+    # "Loading the feed…" against a healthy-looking service.
+    "cognito-idp",
+  ]) : toset([])
+}
+
+# Not every service is offered in every AZ — cognito-idp covers only a subset,
+# while secretsmanager/ecr/logs cover all of them. Pinning every endpoint to
+# private[0] therefore fails for the narrower services ("does not support the
+# availability zone of the subnet"), and hardcoding an AZ name is unsafe because
+# AZ names map to different physical zones per account. So ask each service which
+# AZs it supports and place its endpoint in the first private subnet that matches.
+data "aws_vpc_endpoint_service" "interface" {
+  for_each     = local.interface_endpoint_services
+  service_name = "com.amazonaws.${data.aws_region.current.name}.${each.value}"
+}
+
+locals {
+  # service -> private subnet ids in AZs that service actually supports
+  endpoint_subnets = {
+    for svc in local.interface_endpoint_services : svc => [
+      for s in aws_subnet.private : s.id
+      if contains(data.aws_vpc_endpoint_service.interface[svc].availability_zones, s.availability_zone)
+    ]
+  }
+}
+
+resource "aws_vpc_endpoint" "interface" {
+  for_each          = local.interface_endpoint_services
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.${each.value}"
+  vpc_endpoint_type = "Interface"
+  # Single-AZ per endpoint, mirroring the dev cost tradeoff above — but the AZ is
+  # now chosen from what the service supports rather than assumed.
+  subnet_ids = length(local.endpoint_subnets[each.key]) > 0 ? [
+    local.endpoint_subnets[each.key][0]
+  ] : []
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  lifecycle {
+    precondition {
+      condition     = length(local.endpoint_subnets[each.key]) > 0
+      error_message = "No private subnet is in an availability zone that supports com.amazonaws.${data.aws_region.current.name}.${each.key}. Add a private subnet in one of: ${join(", ", data.aws_vpc_endpoint_service.interface[each.key].availability_zones)}."
+    }
+  }
+
+  tags = { Name = "${var.project}-vpce-${each.value}", Project = var.project }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  count             = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = { Name = "${var.project}-vpce-s3", Project = var.project }
+}
+
+data "aws_region" "current" {}
+
+# --------------------------------------------------------------------------- #
 # Security Groups
 # --------------------------------------------------------------------------- #
 
@@ -205,16 +303,36 @@ resource "aws_security_group" "alb_public" {
 resource "aws_security_group" "alb_internal" {
   #checkov:skip=CKV_AWS_382: Open egress needed for internal ALB→ECS in lab
   #checkov:skip=CKV2_AWS_5: SG attached to the internal ALB via var ref in the alb module (cross-module, untraceable by Checkov)
-  name        = "${var.project}-sg-alb-internal"
-  description = "Internal ALB: allow HTTPS from VPC"
+  # name_prefix, not name: create_before_destroy below means the replacement SG
+  # exists while the old one is still attached, and a fixed name would collide.
+  name_prefix = "${var.project}-sg-alb-internal-"
+  # ASCII only, and keep it short: AWS rejects a GroupDescription containing any
+  # character outside ASCII with "Character sets beyond ASCII are not supported"
+  # (an em-dash here failed the apply). Details belong in the comments below.
+  description = "Internal ALB: allow HTTP from VPC on port 80"
   vpc_id      = aws_vpc.main.id
 
+  # AWS cannot modify a security group's description, so editing it forces
+  # replacement — and the default destroy-then-create order cannot work while
+  # the internal ALB still references the group: the delete fails with
+  # DependencyViolation and the apply dies partway through (it took the mail
+  # server with it once). create_before_destroy makes Terraform stand up the
+  # new group, repoint the ALB, and only then remove the old one.
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  # M7-T6 fix — this was 443 (HTTPS), but the internal listener actually
+  # runs HTTP on port 80 (aws_lb_listener.internal_http). Every real
+  # connection attempt (mail server content_filter -> internal ALB) was
+  # silently timing out because of this mismatch; nothing had exercised
+  # this path end-to-end before the mail server did.
   ingress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
-    description = "HTTPS from VPC"
+    description = "HTTP from VPC"
   }
 
   egress {
@@ -297,6 +415,36 @@ resource "aws_security_group" "mail" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
     description = "SMTP inbound"
+  }
+
+
+  # M7-T6 — IMAP/IMAPS so an email client (not just swaks) can connect and
+  # read mail delivered by Dovecot.
+  ingress {
+    from_port   = 143
+    to_port     = 143
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "IMAP inbound"
+  }
+
+  ingress {
+    from_port   = 993
+    to_port     = 993
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "IMAPS inbound"
+  }
+
+  # M7-T6 — authenticated SMTP submission, so email clients can send mail
+  # through this server (not just receive it). SASL-authenticated only —
+  # see the submission service in cloud-init.yml's master.cf block.
+  ingress {
+    from_port   = 587
+    to_port     = 587
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SMTP submission (authenticated)"
   }
 
   ingress {

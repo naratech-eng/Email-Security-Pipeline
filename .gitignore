@@ -174,3 +174,19 @@ venv/
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Begin: ritual init — scaffolded skill dirs (regenerated on every init)
+.agents/skills/ritual/
+.claude/skills/ritual/
+.github/skills/ritual/
+.windsurf/rules/ritual-discovery.md
+CLAUDE.local.md
+# End: ritual init
+.ritual/
+# Ritual build artifacts (local, do not commit)
+BUILD-BRIEF.md
+BUILD-BRIEF-VERIFICATION.md
+UX-REVIEW.md
+BUILD-BRIEF-*.md
+UX-REVIEW-*.md
+IMPLEMENTATION-PLAN.md

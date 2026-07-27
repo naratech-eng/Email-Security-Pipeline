@@ -1,0 +1,126 @@
+name: Backend Deploy — dev
+
+# CI-T1: automates what was, until now, a manual build → push → deploy done
+# by hand. Triggered on push to dev so a merged backend/ change reaches the
+# live esp-api ECS service without anyone re-running that sequence locally.
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "backend/**"
+      - "notebooks/M4/m4_t3_url_features.py"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/backend-deploy.yml"
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: esp-api
+  ECS_CLUSTER: esp-cluster
+  ECS_SERVICE: esp-api
+  ECS_TASK_DEFINITION_FAMILY: esp-api
+  CONTAINER_NAME: api
+
+jobs:
+  build-scan-push-deploy:
+    name: build, scan, push, deploy
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: vars
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # v4/v7 below move these off the deprecated node20 runtime onto node24.
+      # Their only breaking changes were removing deprecated inputs/envs
+      # (DOCKER_BUILD_NO_SUMMARY, DOCKER_BUILD_EXPORT_RETENTION_DAYS, legacy
+      # export-build) — none of which this workflow used.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Build once, locally (not pushed yet) — Fargate runs linux/amd64,
+      # ubuntu-latest runners are natively amd64 so this needs no emulation.
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.tag }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+
+      # CI-T1 acceptance criteria: required because this deploys straight to
+      # ECS Fargate — no host EC2 to run scanning agents on, so the image
+      # itself is the only place to catch known CVEs before it ships.
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.tag }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Push image
+        run: |
+          docker push "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.tag }}"
+          docker push "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ env.ECS_TASK_DEFINITION_FAMILY }}" \
+            --query taskDefinition \
+            --region "${{ env.AWS_REGION }}" \
+            > task-definition.json
+
+      - name: Fill in new image
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.tag }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # amazon-ecs-deploy-task-definition already waits for ECS's own view of
+      # service stability; this is an independent check through the actual
+      # public path (DNS → ALB → target group), not just ECS's internal one.
+      - name: Verify /health through the public domain
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://esp-api.naratech.xyz/health || echo "000")
+            if [ "$code" = "200" ]; then
+              echo "Health check passed (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: got HTTP $code, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check did not return 200 after deploy"
+          exit 1

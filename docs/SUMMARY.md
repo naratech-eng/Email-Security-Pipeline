@@ -4,9 +4,11 @@
 
 ## Product
 
+* [Project Proposal](proposal.md)
 * [Product Requirements (PRD)](prd.md)
 * [MoSCoW Requirements](requirements-moscow.md)
 * [Roadmap](roadmap.md)
+* [Presentation Outline](presentation-outline.md)
 
 ## Engineering
 
@@ -16,6 +18,7 @@
 * [DevSecOps](devsecops.md)
 * [Threat Model](threat-model.md)
 * [Test Plan](test-plan.md)
+* [M7-T1: FastAPI Inference Service](m7-t1-fastapi-service.md)
 
 ## Machine Learning
 

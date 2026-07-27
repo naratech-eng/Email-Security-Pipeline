@@ -37,7 +37,14 @@ jobs:
         run: terraform init
         working-directory: ${{ env.TF_WORKING_DIR }}
 
+      # amplify_github_access_token is passed as an env var rather than -var so
+      # an unset secret renders as "" and matches the variable's default. The
+      # PAT is only consumed when the Amplify app is first created (the field is
+      # write-only in the AWS API and the module ignores changes to it), so
+      # routine applies here succeed without it.
       - name: Terraform apply
+        env:
+          TF_VAR_amplify_github_access_token: ${{ secrets.TF_VAR_AMPLIFY_GITHUB_ACCESS_TOKEN }}
         run: |
           terraform apply -auto-approve \
             -var="key_name=${{ secrets.TF_VAR_KEY_NAME }}" \

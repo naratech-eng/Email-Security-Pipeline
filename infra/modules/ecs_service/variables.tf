@@ -31,6 +31,42 @@ variable "model_bucket_name" {
   type = string
 }
 
+variable "db_credentials_secret_arn" {
+  type = string
+}
+
+variable "jwt_signing_key_secret_arn" {
+  type = string
+}
+
+variable "cognito_user_pool_id" {
+  type        = string
+  default     = ""
+  description = "Cognito user pool id — API validates dashboard access tokens against its JWKS + assigns groups."
+}
+
+variable "cognito_user_pool_arn" {
+  type        = string
+  default     = ""
+  description = "Cognito user pool ARN — scopes the task role's admin (claim-role) permissions."
+}
+
+variable "cognito_app_client_id" {
+  type        = string
+  default     = ""
+  description = "Cognito app client id — optional client_id check on incoming access tokens."
+}
+
+variable "cors_allowed_origins" {
+  type        = list(string)
+  description = "Origins allowed to call the API from a browser."
+  default = [
+    "http://localhost:3000",
+    "https://esp.naratech.xyz",
+    "https://esp-dev.naratech.xyz",
+  ]
+}
+
 variable "container_image" {
   type    = string
   default = "public.ecr.aws/nginx/nginx:latest"

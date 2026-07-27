@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
@@ -39,11 +43,12 @@ module "s3_datasets" {
 }
 
 module "s3_models" {
-  source           = "../../modules/s3_bucket"
-  project          = var.project
-  purpose          = "models"
-  bucket_name      = "${var.project}-models-${var.aws_region}-802531654188"
-  enable_lifecycle = false
+  source                             = "../../modules/s3_bucket"
+  project                            = var.project
+  purpose                            = "models"
+  bucket_name                        = "${var.project}-models-${var.aws_region}-802531654188"
+  enable_lifecycle                   = false
+  noncurrent_version_expiration_days = 30 # OBS-T3
 }
 
 module "s3_logs" {
@@ -51,6 +56,16 @@ module "s3_logs" {
   project          = var.project
   purpose          = "logs"
   bucket_name      = "${var.project}-logs-${var.aws_region}-802531654188"
+  enable_lifecycle = false
+}
+
+# Holds phishing_filter.py, which the mail server fetches at boot. Kept out of
+# user_data because that has a hard 16384-byte limit the script outgrew.
+module "s3_scripts" {
+  source           = "../../modules/s3_bucket"
+  project          = var.project
+  purpose          = "scripts"
+  bucket_name      = "${var.project}-scripts-${var.aws_region}-802531654188"
   enable_lifecycle = false
 }
 
@@ -72,6 +87,19 @@ module "rds" {
   private_subnet_ids = module.network.private_subnet_ids
   sg_rds_id          = module.network.sg_rds_id
   db_password        = var.db_password
+}
+
+# --------------------------------------------------------------------------- #
+# Secrets Manager — app secrets for the FastAPI service (SEC-T3)
+# --------------------------------------------------------------------------- #
+module "secrets" {
+  source      = "../../modules/secrets_manager"
+  project     = var.project
+  environment = var.environment
+  db_username = module.rds.username
+  db_password = var.db_password
+  db_host     = module.rds.address
+  db_name     = module.rds.db_name
 }
 
 # --------------------------------------------------------------------------- #
@@ -131,39 +159,122 @@ resource "aws_acm_certificate_validation" "esp" {
 # ECS Fargate
 # --------------------------------------------------------------------------- #
 module "ecs" {
-  source             = "../../modules/ecs_service"
-  project            = var.project
-  aws_region         = var.aws_region
-  environment        = var.environment
-  private_subnet_ids = module.network.private_subnet_ids
-  sg_ecs_id          = module.network.sg_ecs_id
-  public_tg_arn      = module.alb.public_tg_arn
-  internal_tg_arn    = module.alb.internal_tg_arn
-  model_bucket_name  = module.s3_models.bucket_id
+  source                     = "../../modules/ecs_service"
+  project                    = var.project
+  aws_region                 = var.aws_region
+  environment                = var.environment
+  private_subnet_ids         = module.network.private_subnet_ids
+  sg_ecs_id                  = module.network.sg_ecs_id
+  public_tg_arn              = module.alb.public_tg_arn
+  internal_tg_arn            = module.alb.internal_tg_arn
+  model_bucket_name          = module.s3_models.bucket_id
+  db_credentials_secret_arn  = module.secrets.db_credentials_arn
+  jwt_signing_key_secret_arn = module.secrets.jwt_signing_key_arn
+
+  # M7-T14 — the API validates dashboard access tokens (JWKS) and assigns
+  # groups via claim-role. CORS lets the SPA call it from the browser.
+  cognito_user_pool_id  = module.cognito.user_pool_id
+  cognito_user_pool_arn = module.cognito.user_pool_arn
+  cognito_app_client_id = module.cognito.client_id
+
+  # Real browser origins for both dev and prod: the custom domains AND the
+  # Amplify default domains (the latter are live before custom-domain DNS
+  # resolves), plus localhost for `npm run dev`.
+  cors_allowed_origins = [
+    "http://localhost:3000",
+    "https://esp-dev.naratech.xyz", # dev custom domain
+    "https://esp.naratech.xyz",     # prod custom domain
+    module.amplify.dev_branch_url,  # https://dev.<id>.amplifyapp.com
+    module.amplify.prod_branch_url, # https://naratech.<id>.amplifyapp.com
+  ]
+
+  # Target groups aren't usable by an ECS service until a listener has
+  # attached them to a load balancer. The TG ARN alone (public_tg_arn /
+  # internal_tg_arn above) doesn't carry that dependency, so without this,
+  # Terraform can create the ECS service in parallel with — or before — the
+  # ALB listeners finish, and AWS rejects it with "target group ... does not
+  # have an associated load balancer."
+  depends_on = [module.alb]
 }
 
 # --------------------------------------------------------------------------- #
 # EC2 Mail Server (Rocky Linux 9) + Route53 A record for mail.naratech.xyz
 # --------------------------------------------------------------------------- #
 module "mail_server" {
-  source           = "../../modules/ec2_mailserver"
-  project          = var.project
-  public_subnet_id = module.network.public_subnet_ids[0]
-  sg_mail_id       = module.network.sg_mail_id
-  key_name         = var.key_name
-  mail_domain      = var.mail_domain
-  mail_hostname    = var.mail_hostname
-  mail_zone_id     = var.mail_zone_id
+  source                     = "../../modules/ec2_mailserver"
+  project                    = var.project
+  public_subnet_id           = module.network.public_subnet_ids[0]
+  sg_mail_id                 = module.network.sg_mail_id
+  key_name                   = var.key_name
+  mail_domain                = var.mail_domain
+  mail_hostname              = var.mail_hostname
+  mail_zone_id               = var.mail_zone_id
+  jwt_signing_key_secret_arn = module.secrets.jwt_signing_key_arn
+  api_internal_url           = module.alb.internal_alb_dns
+  ses_smtp_secret_arn        = module.ses_relay.smtp_credentials_secret_arn
+  ses_relay_host             = module.ses_relay.relay_host
+  scripts_bucket             = module.s3_scripts.bucket_id
+  certbot_email              = var.certbot_email
+}
+
+# --------------------------------------------------------------------------- #
+# SES outbound relay + SPF/DKIM/DMARC (M7-T6)
+# --------------------------------------------------------------------------- #
+module "ses_relay" {
+  source                      = "../../modules/ses_relay"
+  project                     = var.project
+  mail_hostname               = var.mail_hostname
+  mail_zone_id                = var.mail_zone_id
+  sandbox_verified_recipients = var.ses_sandbox_verified_recipients
+}
+
+# --------------------------------------------------------------------------- #
+# S3 — profile avatars (browser upload via Cognito Identity Pool)
+# --------------------------------------------------------------------------- #
+module "s3_avatars" {
+  source      = "../../modules/s3_avatars"
+  project     = var.project
+  bucket_name = "${var.project}-avatars-${var.aws_region}-802531654188"
 }
 
 # --------------------------------------------------------------------------- #
 # Cognito
 # --------------------------------------------------------------------------- #
 module "cognito" {
-  source        = "../../modules/cognito"
-  project       = var.project
-  callback_urls = var.cognito_callback_urls
-  logout_urls   = var.cognito_logout_urls
+  source             = "../../modules/cognito"
+  project            = var.project
+  callback_urls      = var.cognito_callback_urls
+  logout_urls        = var.cognito_logout_urls
+  avatars_bucket_arn = module.s3_avatars.bucket_arn
+
+  # Send verification/reset emails from the verified mail.naratech.xyz SES
+  # identity instead of the throttled COGNITO_DEFAULT sender.
+  ses_source_arn = module.ses_relay.identity_arn
+  ses_from_email = "no-reply@mail.naratech.xyz"
+}
+
+# --------------------------------------------------------------------------- #
+# Amplify Hosting — analyst dashboard (frontend/). Auto-builds on merge to
+# `dev` (-> esp-dev) and `naratech` (-> esp). Cognito ids flow in from above.
+# --------------------------------------------------------------------------- #
+module "amplify" {
+  source               = "../../modules/amplify"
+  project              = var.project
+  aws_region           = var.aws_region
+  github_access_token  = var.amplify_github_access_token
+  api_base_url         = var.dashboard_api_base_url
+  cognito_user_pool_id = module.cognito.user_pool_id
+  cognito_client_id    = module.cognito.client_id
+
+  # Enables authenticated browser->S3 avatar uploads in the deployed app.
+  cognito_identity_pool_id = module.cognito.identity_pool_id
+  avatars_bucket           = module.s3_avatars.bucket_id
+
+  # Domains are the delegated subdomain zones, never the naratech.xyz apex —
+  # the apex is managed in a different AWS account, which is why esp / esp-api /
+  # mail / esp-dev each exist as their own hosted zone here. Amplify resolves
+  # each domain to its zone in this account and writes its own DNS records.
+  # Those zones are created outside Terraform (see terraform.tfvars).
 }
 
 # --------------------------------------------------------------------------- #
@@ -214,6 +325,37 @@ output "cognito_client_id" {
   value = module.cognito.client_id
 }
 
+output "cognito_identity_pool_id" {
+  value       = module.cognito.identity_pool_id
+  description = "VITE_COGNITO_IDENTITY_POOL_ID for the dashboard."
+}
+
+output "avatars_bucket" {
+  value       = module.s3_avatars.bucket_id
+  description = "VITE_AVATARS_BUCKET for the dashboard."
+}
+
+output "amplify_app_id" {
+  value       = module.amplify.app_id
+  description = "Amplify app id for the dashboard."
+}
+
+output "amplify_dev_url" {
+  value       = module.amplify.dev_branch_url
+  description = "Default Amplify URL for the dev branch (before the custom domain resolves)."
+}
+
+output "amplify_prod_url" {
+  value       = module.amplify.prod_branch_url
+  description = "Default Amplify URL for the naratech (prod) branch."
+}
+
+output "amplify_domain_records" {
+  value       = module.amplify.amplify_domain_records
+  description = "Amplify's cert-verification records. Normally empty/unneeded now that each domain is a Route53 zone in this account — Amplify writes its own records."
+}
+
+
 output "datasets_bucket" {
   value = module.s3_datasets.bucket_id
 }
@@ -225,4 +367,14 @@ output "models_bucket" {
 output "esp_acm_cert_arn" {
   value       = aws_acm_certificate_validation.esp.certificate_arn
   description = "Paste this ARN into Amplify console when setting esp.naratech.xyz custom domain"
+}
+
+output "db_credentials_secret_arn" {
+  value       = module.secrets.db_credentials_arn
+  description = "SEC-T3 — DB credentials, injected into the ECS task at runtime"
+}
+
+output "jwt_signing_key_secret_arn" {
+  value       = module.secrets.jwt_signing_key_arn
+  description = "SEC-T3 — JWT signing key, injected into the ECS task at runtime"
 }

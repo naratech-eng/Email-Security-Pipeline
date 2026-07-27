@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6B7280"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+  <text x="60" y="70" font-size="40" font-weight="bold" fill="#2E1065">Git Workflow — Branch &amp; Environment Gating</text>
+  <text x="60" y="112" font-size="26" fill="#6B7280">feature/* + dev-&lt;name&gt; → dev → naratech · every promotion passes a gate</text>
+
+  <!-- feature pill -->
+  <rect x="60" y="245" width="200" height="80" rx="40" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="160" y="295" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">feature/*</text>
+  <text x="160" y="358" font-size="20" fill="#52525B" text-anchor="middle">per-feature branches</text>
+
+  <!-- personal pill -->
+  <rect x="60" y="415" width="200" height="80" rx="40" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="160" y="465" font-size="26" font-weight="bold" fill="#2E1065" text-anchor="middle">dev-&lt;name&gt;</text>
+  <text x="160" y="528" font-size="20" fill="#52525B" text-anchor="middle">personal branches</text>
+  <text x="160" y="556" font-size="20" fill="#52525B" text-anchor="middle">dev-nara · dev-michael …</text>
+
+  <!-- PR gates box -->
+  <rect x="320" y="220" width="310" height="310" rx="16" fill="#FDF2F8" stroke="#DB2777" stroke-width="3"/>
+  <text x="475" y="266" font-size="25" font-weight="bold" fill="#DB2777" text-anchor="middle">PR GATES</text>
+  <text x="475" y="312" font-size="21" fill="#2E1065" text-anchor="middle">SAST · SCA · IaC scans</text>
+  <text x="475" y="344" font-size="21" fill="#2E1065" text-anchor="middle">terraform plan as PR comment</text>
+  <text x="475" y="376" font-size="21" fill="#2E1065" text-anchor="middle">Amplify preview per PR</text>
+  <text x="475" y="408" font-size="21" fill="#2E1065" text-anchor="middle">code review · ≥ 1 approver</text>
+  <rect x="335" y="440" width="280" height="52" rx="26" fill="#BE185D"/>
+  <text x="475" y="473" font-size="19" font-weight="bold" fill="#FFFFFF" text-anchor="middle">HIGH / CRITICAL blocks merge</text>
+
+  <!-- dev pill -->
+  <rect x="690" y="330" width="180" height="90" rx="45" fill="#FCE7F3" stroke="#DB2777" stroke-width="3"/>
+  <text x="780" y="386" font-size="28" font-weight="bold" fill="#2E1065" text-anchor="middle">dev</text>
+  <text x="780" y="470" font-size="22" fill="#52525B" text-anchor="middle">auto terraform apply</text>
+  <text x="780" y="500" font-size="22" fill="#52525B" text-anchor="middle">→ dev/staging env</text>
+  <text x="780" y="530" font-size="22" fill="#52525B" text-anchor="middle">passive DAST baseline</text>
+
+  <!-- Promotion gate box -->
+  <rect x="930" y="220" width="330" height="310" rx="16" fill="#FDF2F8" stroke="#DB2777" stroke-width="3"/>
+  <text x="1095" y="266" font-size="25" font-weight="bold" fill="#DB2777" text-anchor="middle">PROMOTION GATE</text>
+  <text x="1095" y="312" font-size="21" fill="#2E1065" text-anchor="middle">nightly full DAST</text>
+  <text x="1095" y="344" font-size="21" fill="#2E1065" text-anchor="middle">ZAP active + Schemathesis fuzz</text>
+  <text x="1095" y="376" font-size="21" fill="#2E1065" text-anchor="middle">no open HIGH findings</text>
+  <text x="1095" y="408" font-size="21" fill="#2E1065" text-anchor="middle">manual approval to apply</text>
+  <rect x="970" y="440" width="250" height="52" rx="26" fill="#BE185D"/>
+  <text x="1095" y="474" font-size="21" font-weight="bold" fill="#FFFFFF" text-anchor="middle">HIGH blocks promotion</text>
+
+  <!-- naratech pill -->
+  <rect x="1320" y="330" width="220" height="90" rx="45" fill="#6D28D9"/>
+  <text x="1430" y="386" font-size="28" font-weight="bold" fill="#FFFFFF" text-anchor="middle">naratech</text>
+  <text x="1430" y="470" font-size="22" fill="#52525B" text-anchor="middle">prod (demo) env</text>
+  <text x="1430" y="500" font-size="22" fill="#52525B" text-anchor="middle">tagged releases v*</text>
+
+  <!-- flow arrows -->
+  <line x1="260" y1="290" x2="312" y2="335" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="260" y1="455" x2="312" y2="415" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="630" y1="375" x2="682" y2="375" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="870" y1="375" x2="922" y2="375" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1260" y1="375" x2="1312" y2="375" stroke="#6B7280" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- branch protection footer -->
+  <rect x="60" y="640" width="1480" height="120" rx="16" fill="#FAF5FF" stroke="#A78BFA" stroke-width="3"/>
+  <text x="90" y="688" font-size="25" font-weight="bold" fill="#7C3AED">BRANCH PROTECTION (GitHub)</text>
+  <text x="90" y="730" font-size="23" fill="#2E1065">required status checks · no force push · dismiss stale approvals · conventional commits · PR template with threat-model impact + rollback plan</text>
+
+  <!-- identity note -->
+  <text x="60" y="830" font-size="23" fill="#6B7280">CI authenticates to AWS via <tspan font-weight="bold" fill="#2E1065">GitHub OIDC + least-privilege IAM role</tspan> — no static keys anywhere in repo or CI</text>
+</svg>

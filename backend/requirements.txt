@@ -1,0 +1,24 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.9
+boto3>=1.35
+pyjwt[crypto]>=2.9       # M7-T14 — verify Cognito access-token JWTs against JWKS
+python-multipart>=0.0.9  # required by FastAPI for Form/File (/analyze/email upload)
+psycopg[binary]>=3.2     # M7-T15 detections store (RDS Postgres)
+alembic>=1.13            # M7-T15 schema migrations
+sqlalchemy>=2.0          # alembic dependency (migrations use plain SQL, not the ORM)
+joblib>=1.4
+scikit-learn>=1.5
+pandas>=2.2
+numpy>=1.26
+
+# url_charcnn (M6-T3) is the primary URL model (F1 0.9755, ~1MB on disk).
+# URLPredictor falls back to the Random Forest (url_rf, F1 0.866) only if
+# tensorflow is unavailable — that fallback is currently a 1.7GB artifact
+# (unbounded tree depth in M6-T4 training) that doesn't fit the Fargate
+# task's 1024MB memory limit, so keep tensorflow installed for now.
+tensorflow>=2.16
+
+# Test-only: starlette's TestClient (used by tests/test_integration_predict.py)
+# requires httpx2, not httpx, as of the fastapi/starlette versions above.
+httpx2>=2.0

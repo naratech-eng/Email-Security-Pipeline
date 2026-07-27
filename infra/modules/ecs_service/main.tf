@@ -70,6 +70,49 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
   })
 }
 
+# M7-T14 — the API's claim-role endpoint reads a user's custom:role and adds
+# them to the matching Cognito group. Scoped to this pool only.
+resource "aws_iam_role_policy" "ecs_task_cognito" {
+  count = var.cognito_user_pool_arn != "" ? 1 : 0
+  name  = "cognito-claim-role"
+  role  = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminListGroupsForUser"
+      ]
+      Resource = [var.cognito_user_pool_arn]
+    }]
+  })
+}
+
+# SEC-T3 — read-only access to exactly the two app secrets, nothing else.
+# Attached to the execution role, not the task role: ECS resolves the
+# container definition's `secrets` block (env var injection at container
+# startup) using the execution role, not the task role. The task role is for
+# permissions the app itself needs at runtime (e.g. S3 model reads below).
+resource "aws_iam_role_policy" "ecs_execution_secrets" {
+  name = "app-secrets-read"
+  role = aws_iam_role.ecs_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = [
+        var.db_credentials_secret_arn,
+        var.jwt_signing_key_secret_arn
+      ]
+    }]
+  })
+}
+
 # Task definition — placeholder image until M6 builds the real one
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project}-api"
@@ -93,7 +136,18 @@ resource "aws_ecs_task_definition" "api" {
     }]
 
     environment = [
-      { name = "ENV", value = var.environment }
+      { name = "ENV", value = var.environment },
+      { name = "COGNITO_USER_POOL_ID", value = var.cognito_user_pool_id },
+      { name = "COGNITO_REGION", value = var.aws_region },
+      { name = "COGNITO_APP_CLIENT_ID", value = var.cognito_app_client_id },
+      { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.cors_allowed_origins) },
+    ]
+
+    # SEC-T3 — pulled from Secrets Manager at task startup, never plaintext
+    # in the task definition, CI logs, or the repo.
+    secrets = [
+      { name = "DB_CREDENTIALS_JSON", valueFrom = var.db_credentials_secret_arn },
+      { name = "JWT_SIGNING_KEY", valueFrom = var.jwt_signing_key_secret_arn }
     ]
 
     logConfiguration = {
