@@ -9,6 +9,12 @@ applications:
       phases:
         preBuild:
           commands:
+            # react-router@8 declares engines.node >=22.22.0; nvm avoids
+            # depending on whatever the build image's default Node happens to
+            # be (unconfirmed, and Amplify's default has historically lagged
+            # new majors). Amplify's build image includes nvm for exactly
+            # this reason.
+            - nvm install 22 && nvm use 22
             - npm ci
         build:
           commands:

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router';
 import { Loader2, MailCheck, RefreshCw } from 'lucide-react';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '@/components/ui/button';

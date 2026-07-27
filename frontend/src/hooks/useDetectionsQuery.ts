@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { MAX_PAGE_SIZE } from '@/lib/api';
 import type { DetectionSource, Verdict } from '@/lib/types';
 

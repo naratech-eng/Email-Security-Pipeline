@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router';
 import { ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from './AuthProvider';
