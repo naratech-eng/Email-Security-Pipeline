@@ -5,6 +5,21 @@
 **MoSCoW:** Must M-07 · Depends on: M6-T6 (inference wrapper), M6-T7 (artifact registry)
 **Status:** Not started
 
+> **As built (superseded design):** this doc's original plan was for the mail
+> filter and dashboard to call `/predict/email` and `/predict/url` directly.
+> What actually shipped is a single combined endpoint, `POST /analyze/email`
+> ([`backend/main.py`](../backend/main.py)) — it parses the raw/pasted email,
+> scores the body text, extracts every URL from the body and scores each one
+> in-process (no separate HTTP call), then returns one merged verdict and
+> persists one detection row. Both the milter
+> ([`phishing_filter.py`](../infra/modules/ec2_mailserver/files/phishing_filter.py))
+> and the frontend ([`api.ts`](../frontend/src/lib/api.ts)) only ever call
+> `/analyze/email`. `/predict/email` and `/predict/url` still exist in the API
+> (still auth-gated) but have no real caller — they're leftover single-model
+> endpoints from this earlier design, not part of the live flow. The auth
+> model below (§4) *is* accurate for what shipped — see `require_auth` in
+> `backend/main.py`.
+
 ---
 
 ## 1. Objective

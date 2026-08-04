@@ -87,6 +87,7 @@ module "rds" {
   private_subnet_ids = module.network.private_subnet_ids
   sg_rds_id          = module.network.sg_rds_id
   db_password        = var.db_password
+  alerts_topic_arn   = module.monitoring.alerts_topic_arn
 }
 
 # --------------------------------------------------------------------------- #
@@ -103,6 +104,15 @@ module "secrets" {
 }
 
 # --------------------------------------------------------------------------- #
+# Monitoring — shared SNS alerts topic (OBS-T1 / M9-T4)
+# --------------------------------------------------------------------------- #
+module "monitoring" {
+  source      = "../../modules/monitoring"
+  project     = var.project
+  alert_email = var.alert_email
+}
+
+# --------------------------------------------------------------------------- #
 # ALBs + ACM cert for esp-api.naratech.xyz (fully automated via Route53)
 # --------------------------------------------------------------------------- #
 module "alb" {
@@ -114,6 +124,29 @@ module "alb" {
   sg_alb_public_id   = module.network.sg_alb_public_id
   sg_alb_internal_id = module.network.sg_alb_internal_id
   esp_api_zone_id    = var.esp_api_zone_id
+  alerts_topic_arn   = module.monitoring.alerts_topic_arn
+}
+
+# --------------------------------------------------------------------------- #
+# WAF — managed rule sets on the public ALB (SEC-T2 / M9-T4)
+# --------------------------------------------------------------------------- #
+module "waf" {
+  source           = "../../modules/waf"
+  project          = var.project
+  alb_arn          = module.alb.public_alb_arn
+  alerts_topic_arn = module.monitoring.alerts_topic_arn
+  block_mode       = var.waf_block_mode
+}
+
+# --------------------------------------------------------------------------- #
+# Security baseline — GuardDuty, Security Hub, CloudTrail, Config (M9-T4)
+# --------------------------------------------------------------------------- #
+module "security_baseline" {
+  source              = "../../modules/security_baseline"
+  project             = var.project
+  alerts_topic_arn    = module.monitoring.alerts_topic_arn
+  enable_guardduty    = var.enable_guardduty
+  enable_security_hub = var.enable_security_hub
 }
 
 # --------------------------------------------------------------------------- #

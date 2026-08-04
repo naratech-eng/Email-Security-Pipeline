@@ -29,3 +29,8 @@ variable "instance_class" {
   type    = string
   default = "db.t4g.micro"
 }
+
+variable "alerts_topic_arn" {
+  type        = string
+  description = "SNS topic ARN for the OBS-T1 CPU/connections alarms."
+}

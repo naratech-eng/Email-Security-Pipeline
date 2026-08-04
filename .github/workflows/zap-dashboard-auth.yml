@@ -1,0 +1,90 @@
+name: DAST — Authenticated Dashboard Scan (manual)
+
+# M9-T5 / docs/devsecops.md §3.3 — the one DAST gap that can't run
+# unattended: an authenticated crawl of the Amplify dashboard. Cognito
+# access tokens are short-lived (~1hr) and this repo deliberately does not
+# store a real user's password as a CI secret (a dedicated low-priv service
+# account was considered and rejected in favor of using a real logged-in
+# session — see the M9-T5 discussion). So this is workflow_dispatch-only:
+# log into the dashboard yourself, copy the access token out of the
+# browser's devtools (Application/Storage tab -- Cognito's amplify/oidc
+# client stores it under a CognitoIdentityServiceProvider.* key in
+# localStorage), and paste it in when running this workflow manually.
+#
+# Trade-off, stated plainly: this injects the token as a bearer header on
+# every request ZAP makes (via the Replacer add-on), which gives real
+# coverage of everything the API returns into the dashboard -- the actual
+# attacker-relevant surface, since stored/reflected XSS from
+# attacker-controlled email content (subject, sender, etc.) lives in API
+# responses rendered into the DOM. It is NOT a full Selenium-driven login
+# that reproduces exact client-side route-guard behavior; ZAP's spider
+# discovers and probes routes/requests, it doesn't literally click through
+# the SPA as a logged-in human would.
+on:
+  workflow_dispatch:
+    inputs:
+      cognito_token:
+        description: "Your Cognito access token (from browser devtools, expires ~1hr — log in first, run this promptly after)"
+        required: true
+        type: string
+      target_url:
+        description: "Dashboard URL to scan"
+        required: false
+        type: string
+        default: "https://esp-dev.naratech.xyz"
+
+jobs:
+  zap-dashboard-auth:
+    name: ZAP authenticated scan — dashboard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: ZAP authenticated full scan
+        uses: zaproxy/action-full-scan@v0.13.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ inputs.target_url }}
+          # -a: alpha-quality rules too. -j: AJAX spider (headless Chrome),
+          # needed for a React SPA -- the traditional spider only follows
+          # <a href> and finds almost nothing on a JS-rendered app.
+          # -z: inject the bearer token as a header on every request ZAP
+          # makes, via the Replacer add-on (see trade-off note above).
+          cmd_options: >-
+            -a -j
+            -z "-config replacer.full_list(0).description=auth
+            -config replacer.full_list(0).enabled=true
+            -config replacer.full_list(0).matchtype=REQ_HEADER
+            -config replacer.full_list(0).matchstr=Authorization
+            -config replacer.full_list(0).regex=false
+            -config replacer.full_list(0).replacement=Bearer ${{ inputs.cognito_token }}"
+          fail_action: false
+
+      - name: Gate on ZAP risk level
+        run: |
+          if [ ! -f report_json.json ]; then
+            echo "::error::ZAP produced no report_json.json."
+            exit 1
+          fi
+          HIGH=$(jq '[.site[]?.alerts[]? | select((.riskcode|tonumber) == 3)] | length' report_json.json)
+          MED=$(jq  '[.site[]?.alerts[]? | select((.riskcode|tonumber) == 2)] | length' report_json.json)
+          echo "ZAP alerts (authenticated) — High: $HIGH, Medium: $MED"
+          jq -r '.site[]?.alerts[]? | "  [risk \(.riskcode)] \(.name) (\(.instances|length) instance(s))"' report_json.json || true
+          if [ "$MED" -gt 0 ]; then
+            echo "::warning::$MED Medium-risk alert(s) — triage manually."
+          fi
+          if [ "$HIGH" -gt 0 ]; then
+            echo "::error::$HIGH High-risk alert(s) in the authenticated dashboard scan — do not promote until triaged."
+            exit 1
+          fi
+          echo "OK — no High-risk alerts in the authenticated dashboard scan."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: zap-dashboard-auth-report
+          path: report_json.json
+          retention-days: 14
