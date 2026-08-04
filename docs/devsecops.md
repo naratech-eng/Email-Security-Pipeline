@@ -160,13 +160,14 @@ nothing enforces it automatically.
 ## 6. Runtime Security Controls
 
 - ALB only on 443; HTTP redirects to HTTPS
-- WAF managed rule sets enabled (CommonRuleSet, KnownBadInputs, IP reputation)
+- WAF managed rule sets on the public ALB (CommonRuleSet, KnownBadInputs incl. Log4Shell, Amazon IP reputation list). Starts in COUNT mode (`waf_block_mode = false`) until a baseline run against real traffic confirms no false positives.
 - Security groups: ALB → ECS → RDS, deny everything else
 - VPC endpoints for ECR, S3, Secrets Manager, CloudWatch Logs
 - RDS encrypted at rest (KMS) and TLS in transit
 - S3: block public access account-wide, default encryption, versioning
-- CloudTrail enabled in all regions, logs to a dedicated S3 bucket
-- **GuardDuty** (threat detection) + **Security Hub** (findings aggregation — our AWS-native SIEM layer) enabled; AWS Config optional
+- CloudTrail enabled multi-region, dual delivery to a dedicated S3 bucket and CloudWatch Logs; AWS Config recorder + delivery channel also live
+- CloudWatch alarms on the two things that predict an outage before it happens: ALB 5xx rate + p95 latency, RDS CPU + connection count — all fanned into one SNS topic (`monitoring` module)
+- **GuardDuty and Security Hub are NOT enabled — a confirmed, permanent account-level limitation, not a gap in the Terraform.** `aws guardduty create-detector --enable` and `aws securityhub enable-security-hub` both 403 with `SubscriptionRequiredException` when run directly against this account (`lab-user`, the $200 school-credit account) with `AdministratorAccess` credentials — ruling out an IAM or CI-role issue. Education/credit AWS accounts commonly block usage-priced services like these to cap surprise billing. The Terraform (`infra/modules/security_baseline`) is written and ready — `enable_guardduty`/`enable_security_hub` just default to `false` — and would take effect immediately on a commercial-tier account.
 
 ## 7. Code Hygiene
 

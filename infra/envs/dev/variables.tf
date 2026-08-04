@@ -148,11 +148,16 @@ variable "enable_guardduty" {
   type        = bool
   default     = false
   description = <<-EOT
-    Off by default after CreateDetector 403'd with SubscriptionRequiredException
-    on the first apply -- an account-level block, not an IAM/code bug. Verify
-    independently (AWS Console > GuardDuty > Enable, or `aws guardduty
-    create-detector --enable` with your own credentials) before flipping this
-    to true, since a repeat failure here blocks every dev apply again.
+    Confirmed OFF permanently, not a temporary flag: `aws guardduty
+    create-detector --enable --profile lab-user` 403s with
+    SubscriptionRequiredException directly against this account (verified
+    outside Terraform/CI, with AdministratorAccess credentials -- ruling out
+    both an IAM gap and a CI-role-specific issue). This is an account-level
+    subscription block on the $200-school-credit lab account, the kind
+    education/credit AWS accounts commonly apply to usage-priced services
+    like GuardDuty to prevent surprise bills. No retry or code change fixes
+    this; it needs a different AWS account tier. Documented as a deliberate,
+    accepted gap in docs/devsecops.md §6, not a TODO.
   EOT
 }
 
@@ -160,10 +165,15 @@ variable "enable_security_hub" {
   type        = bool
   default     = false
   description = <<-EOT
-    Off by default after EnableSecurityHub 403'd with SubscriptionRequiredException
-    on the first apply -- an account-level block, not an IAM/code bug. Verify
-    independently (AWS Console > Security Hub > Enable, or `aws securityhub
-    enable-security-hub` with your own credentials) before flipping this to
-    true, since a repeat failure here blocks every dev apply again.
+    Confirmed OFF permanently, not a temporary flag: `aws securityhub
+    enable-security-hub --profile lab-user` 403s with
+    SubscriptionRequiredException directly against this account (verified
+    outside Terraform/CI, with AdministratorAccess credentials -- ruling out
+    both an IAM gap and a CI-role-specific issue). This is an account-level
+    subscription block on the $200-school-credit lab account, the kind
+    education/credit AWS accounts commonly apply to usage-priced services
+    like Security Hub to prevent surprise bills. No retry or code change
+    fixes this; it needs a different AWS account tier. Documented as a
+    deliberate, accepted gap in docs/devsecops.md §6, not a TODO.
   EOT
 }
