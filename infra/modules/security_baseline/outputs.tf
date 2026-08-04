@@ -1,5 +1,5 @@
 output "guardduty_detector_id" {
-  value = aws_guardduty_detector.this.id
+  value = try(aws_guardduty_detector.this[0].id, null)
 }
 
 output "security_logs_bucket" {

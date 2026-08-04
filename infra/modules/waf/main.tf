@@ -9,8 +9,11 @@
 
 resource "aws_wafv2_web_acl" "this" {
   #checkov:skip=CKV_AWS_192: Log4Shell coverage (part of KnownBadInputsRuleSet below) intentionally starts in COUNT mode via var.block_mode, same "observe before block" pattern already used for the ZAP passive baseline (devsecops.md §3.3) -- flip block_mode=true once a baseline run shows no false positives.
-  name        = "${var.project}-waf"
-  description = "Managed rule sets in front of the public ALB (esp-api.naratech.xyz)"
+  name = "${var.project}-waf"
+  # AWS's description field only allows word chars plus + = : # @ / - , . and
+  # whitespace -- no parentheses. Learned the hard way: CreateWebACL 400s on
+  # ValidationException otherwise.
+  description = "Managed rule sets in front of the public ALB esp-api.naratech.xyz"
   scope       = "REGIONAL"
 
   default_action {

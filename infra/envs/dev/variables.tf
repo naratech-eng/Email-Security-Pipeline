@@ -143,3 +143,27 @@ variable "waf_block_mode" {
   default     = false
   description = "false = WAF managed rules run in COUNT mode (observe only); true = actually block. Flip once a baseline run shows no false positives against real traffic."
 }
+
+variable "enable_guardduty" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Off by default after CreateDetector 403'd with SubscriptionRequiredException
+    on the first apply -- an account-level block, not an IAM/code bug. Verify
+    independently (AWS Console > GuardDuty > Enable, or `aws guardduty
+    create-detector --enable` with your own credentials) before flipping this
+    to true, since a repeat failure here blocks every dev apply again.
+  EOT
+}
+
+variable "enable_security_hub" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Off by default after EnableSecurityHub 403'd with SubscriptionRequiredException
+    on the first apply -- an account-level block, not an IAM/code bug. Verify
+    independently (AWS Console > Security Hub > Enable, or `aws securityhub
+    enable-security-hub` with your own credentials) before flipping this to
+    true, since a repeat failure here blocks every dev apply again.
+  EOT
+}
