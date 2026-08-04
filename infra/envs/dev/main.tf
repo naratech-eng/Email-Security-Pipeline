@@ -142,9 +142,11 @@ module "waf" {
 # Security baseline — GuardDuty, Security Hub, CloudTrail, Config (M9-T4)
 # --------------------------------------------------------------------------- #
 module "security_baseline" {
-  source           = "../../modules/security_baseline"
-  project          = var.project
-  alerts_topic_arn = module.monitoring.alerts_topic_arn
+  source              = "../../modules/security_baseline"
+  project             = var.project
+  alerts_topic_arn    = module.monitoring.alerts_topic_arn
+  enable_guardduty    = var.enable_guardduty
+  enable_security_hub = var.enable_security_hub
 }
 
 # --------------------------------------------------------------------------- #

@@ -141,6 +141,8 @@ resource "aws_s3_bucket_policy" "security_logs" {
 # --------------------------------------------------------------------------- #
 resource "aws_guardduty_detector" "this" {
   #checkov:skip=CKV2_AWS_3: This is a single, standalone AWS account (no AWS Organizations) -- org-wide GuardDuty via a delegated admin account doesn't apply here; a standalone detector is the correct/only option for this account structure.
+  count = var.enable_guardduty ? 1 : 0
+
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
 
@@ -152,6 +154,8 @@ resource "aws_guardduty_detector" "this" {
 # ping without going through Security Hub at all, matching how the ALB/RDS
 # CloudWatch alarms already alert.
 resource "aws_cloudwatch_event_rule" "guardduty_findings" {
+  count = var.enable_guardduty ? 1 : 0
+
   name        = "${var.project}-guardduty-findings"
   description = "Forward GuardDuty findings to the shared alerts topic"
 
@@ -162,7 +166,9 @@ resource "aws_cloudwatch_event_rule" "guardduty_findings" {
 }
 
 resource "aws_cloudwatch_event_target" "guardduty_to_sns" {
-  rule      = aws_cloudwatch_event_rule.guardduty_findings.name
+  count = var.enable_guardduty ? 1 : 0
+
+  rule      = aws_cloudwatch_event_rule.guardduty_findings[0].name
   target_id = "guardduty-to-alerts-topic"
   arn       = var.alerts_topic_arn
 }
@@ -172,15 +178,21 @@ resource "aws_cloudwatch_event_target" "guardduty_to_sns" {
 # and its own managed checks (the AWS-native SIEM layer, per M9-T4's notes).
 # --------------------------------------------------------------------------- #
 resource "aws_securityhub_account" "this" {
+  count = var.enable_security_hub ? 1 : 0
+
   enable_default_standards = false # explicit subscriptions below instead
 }
 
 resource "aws_securityhub_standards_subscription" "cis" {
+  count = var.enable_security_hub ? 1 : 0
+
   standards_arn = "arn:${data.aws_partition.current.partition}:securityhub:${data.aws_region.current.name}::standards/cis-aws-foundations-benchmark/v/1.2.0"
   depends_on    = [aws_securityhub_account.this]
 }
 
 resource "aws_securityhub_standards_subscription" "fsbp" {
+  count = var.enable_security_hub ? 1 : 0
+
   standards_arn = "arn:${data.aws_partition.current.partition}:securityhub:${data.aws_region.current.name}::standards/aws-foundational-security-best-practices/v/1.0.0"
   depends_on    = [aws_securityhub_account.this]
 }
