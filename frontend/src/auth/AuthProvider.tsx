@@ -38,47 +38,65 @@ function asStringArray(value: unknown): string[] {
   return [];
 }
 
+/**
+ * Read the session and profile attributes. Deliberately writes no state:
+ * keeping "who is signed in?" separate from "commit that to React" is what
+ * lets the mount path discard a result that lands after unmount, and keeps the
+ * mount effect from driving state updates out of its own body.
+ *
+ * Returns null for every unauthenticated outcome — no tokens, or a failed
+ * session read — since the provider treats them identically.
+ */
+async function loadAuthUser(opts?: { force?: boolean }): Promise<AuthUser | null> {
+  const session = await fetchAuthSession(opts?.force ? { forceRefresh: true } : undefined);
+  const idPayload = session.tokens?.idToken?.payload;
+  if (!idPayload) return null;
+
+  let attrs: Record<string, string | undefined> = {};
+  try {
+    attrs = await fetchUserAttributes();
+  } catch {
+    // Attributes are best-effort; the token already carries identity.
+  }
+
+  return {
+    sub: String(idPayload.sub ?? ''),
+    email: String(idPayload.email ?? attrs.email ?? ''),
+    groups: asStringArray(idPayload['cognito:groups']),
+    role: attrs['custom:role'],
+    gender: attrs['custom:gender'],
+    avatarUrl: attrs['custom:avatar_url'],
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<AuthUser | null>(null);
 
   const refresh = useCallback(async (opts?: { force?: boolean }) => {
-    try {
-      const session = await fetchAuthSession(
-        opts?.force ? { forceRefresh: true } : undefined,
-      );
-      const idPayload = session.tokens?.idToken?.payload;
-      if (!idPayload) {
-        setUser(null);
-        setStatus('unauthenticated');
-        return;
-      }
-
-      let attrs: Record<string, string | undefined> = {};
-      try {
-        attrs = await fetchUserAttributes();
-      } catch {
-        // Attributes are best-effort; the token already carries identity.
-      }
-
-      setUser({
-        sub: String(idPayload.sub ?? ''),
-        email: String(idPayload.email ?? attrs.email ?? ''),
-        groups: asStringArray(idPayload['cognito:groups']),
-        role: attrs['custom:role'],
-        gender: attrs['custom:gender'],
-        avatarUrl: attrs['custom:avatar_url'],
-      });
-      setStatus('authenticated');
-    } catch {
-      setUser(null);
-      setStatus('unauthenticated');
-    }
+    const next = await loadAuthUser(opts).catch(() => null);
+    setUser(next);
+    setStatus(next ? 'authenticated' : 'unauthenticated');
   }, []);
 
+  // The initial read, on mount. This does not call `refresh()`: the session
+  // lookup is a subscription to an external system, so the state writes belong
+  // in the async callback rather than the effect body, and unlike a
+  // user-triggered refresh this one can still be in flight when the provider
+  // unmounts (a sign-out redirect during a cold start) — `cancelled` keeps that
+  // late answer from resurrecting a user on a torn-down tree.
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let cancelled = false;
+    void (async () => {
+      const next = await loadAuthUser().catch(() => null);
+      if (cancelled) return;
+      setUser(next);
+      setStatus(next ? 'authenticated' : 'unauthenticated');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const doSignOut = useCallback(async () => {
     await signOut();

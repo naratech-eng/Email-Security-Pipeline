@@ -62,10 +62,16 @@ export function useAnalyze(): UseAnalyze {
   // Elapsed time is derived from a timestamp rather than counted up, because a
   // backgrounded tab throttles timers — a counter would silently under-report
   // exactly when the analyst is away and most wants an accurate number.
+  //
+  // The interval is the only writer. There was a synchronous seed call here
+  // too, which re-rendered every consumer an extra time the instant a scan
+  // started for no visible gain: `run()` zeroes `elapsedMs` immediately before
+  // it sets `scanning`, so the seeded value was ~0 — the same thing the first
+  // tick writes 250ms later, below the threshold where the displayed figure
+  // changes.
   useEffect(() => {
     if (state.kind !== 'scanning') return;
     const { startedAt } = state;
-    setElapsedMs(Date.now() - startedAt);
     const id = window.setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
     return () => window.clearInterval(id);
   }, [state]);
