@@ -48,7 +48,7 @@ resource "aws_acm_certificate_validation" "esp_api" {
 resource "aws_lb" "public" {
   #checkov:skip=CKV_AWS_150: Deletion protection would block the OPS-T1 destroy/rebuild runbook; off in dev
   #checkov:skip=CKV_AWS_91: Access logging needs an S3 bucket + ELB-account bucket policy; deferred for the lab
-  #checkov:skip=CKV2_AWS_28: WAF association is scheduled for M9 (Security & Compliance) per the roadmap
+  #checkov:skip=CKV2_AWS_28: WAF is actually associated (modules/waf's aws_wafv2_web_acl_association, wired via envs/dev/main.tf module.waf.alb_arn = module.alb.public_alb_arn) -- Checkov's graph check can't trace this ARN across module boundaries and false-positives here.
   name                       = "${var.project}-alb-public"
   internal                   = false
   load_balancer_type         = "application"
@@ -107,6 +107,53 @@ resource "aws_lb_listener" "public_https" {
   }
 
   depends_on = [aws_acm_certificate_validation.esp_api]
+}
+
+# OBS-T1 — 5xx rate and p95 latency on the public ALB, the two symptoms an
+# operator actually cares about (backend down vs backend slow). Both use
+# treat_missing_data=notBreaching: no requests in a period is "nothing to
+# alarm on", not "assume the worst" — otherwise a quiet dev environment
+# alarms on its own silence.
+resource "aws_cloudwatch_metric_alarm" "public_5xx" {
+  alarm_name          = "${var.project}-alb-public-5xx"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  namespace           = "AWS/ApplicationELB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "More than 10 5xx responses from the inference API in 5 minutes."
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    LoadBalancer = aws_lb.public.arn_suffix
+    TargetGroup  = aws_lb_target_group.public.arn_suffix
+  }
+
+  alarm_actions = [var.alerts_topic_arn]
+  ok_actions    = [var.alerts_topic_arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "public_p95_latency" {
+  alarm_name          = "${var.project}-alb-public-p95-latency"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  metric_name         = "TargetResponseTime"
+  namespace           = "AWS/ApplicationELB"
+  period              = 300
+  extended_statistic  = "p95"
+  threshold           = 2 # seconds — PRD's server-mode latency target
+  alarm_description   = "p95 response time from the inference API exceeded 2s for 15 minutes."
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    LoadBalancer = aws_lb.public.arn_suffix
+    TargetGroup  = aws_lb_target_group.public.arn_suffix
+  }
+
+  alarm_actions = [var.alerts_topic_arn]
+  ok_actions    = [var.alerts_topic_arn]
 }
 
 # Route53 alias A record: esp-api.naratech.xyz → public ALB

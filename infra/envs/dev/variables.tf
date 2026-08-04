@@ -128,3 +128,18 @@ variable "dashboard_api_base_url" {
   default     = "https://esp-api.naratech.xyz"
   description = "FastAPI base URL the dashboard SPA calls (VITE_API_BASE_URL)."
 }
+
+# --------------------------------------------------------------------------- #
+# M9-T4 — security baseline / alerting
+# --------------------------------------------------------------------------- #
+variable "alert_email" {
+  type        = string
+  default     = ""
+  description = "Optional email subscribed to the OBS-T1/M9-T4 SNS alerts topic. SNS sends a confirmation link on first apply; must be clicked manually."
+}
+
+variable "waf_block_mode" {
+  type        = bool
+  default     = false
+  description = "false = WAF managed rules run in COUNT mode (observe only); true = actually block. Flip once a baseline run shows no false positives against real traffic."
+}
