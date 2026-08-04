@@ -1,0 +1,27 @@
+# SEC-SAST — gitleaks config (docs/devsecops.md §3.2).
+#
+# gitleaks scans the FULL git history, not just the working tree, which is the
+# point: GitHub's native push protection only catches secrets at push time and
+# can't see what was committed before it was enabled.
+
+[extend]
+useDefault = true
+
+# Route53 hosted zone IDs trip the entropy-based `generic-api-key` rule
+# (entropy ~3.9, opaque-looking uppercase string). They are not secrets:
+# they're public DNS identifiers that appear in delegation records, and this
+# repo already commits them in plain sight as Terraform variable defaults
+# (infra/envs/dev/variables.tf). The file that triggered the finding
+# (infra/envs/dev/terraform.tfvars) carries a "non-sensitive vars only /
+# NEVER put db_password here" header and holds only zone IDs, domain names,
+# and a key-pair name.
+#
+# Scoped to the zone-ID shape specifically rather than allowlisting the whole
+# file or disabling generic-api-key -- a real credential added to that file
+# later must still fail the scan.
+[[allowlists]]
+description = "AWS Route53 hosted zone IDs — public DNS identifiers, not credentials"
+regexTarget = "match"
+regexes = [
+  '''Z[A-Z0-9]{12,20}''',
+]

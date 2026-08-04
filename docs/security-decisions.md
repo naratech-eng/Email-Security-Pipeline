@@ -61,7 +61,9 @@ Everything below is a genuine gap — listed here once, in one place, rather tha
 | GuardDuty / Security Hub disabled | Permanent AWS account-tier limitation, not fixable in this project | `docs/devsecops.md` §6 |
 | WAF in COUNT mode, not blocking | Pending a baseline run confirming no false positives against real traffic | `infra/modules/waf` (`block_mode` var) |
 | No rate-limiting on the public ALB/WAF | Not configured — a volumetric attack is bounded only by the 2MB body cap and normal AWS limits | `docs/threat-model.md` §6 |
-| gitleaks / CodeQL / SonarCloud not implemented | Real gap versus the intended SAST defense-in-depth (§3.2) — Bandit/pip-audit/npm audit cover what exists today | `docs/devsecops.md` §3.2 |
+| SonarCloud not implemented | The one item left from §3.2's original intent. Semgrep, CodeQL, gitleaks, and eslint-plugin-security all landed with SEC-SAST | `docs/devsecops.md` §3.2 |
+| CodeQL reported but not blocking | `security-extended` is broad and this is its first run — gating before a baseline is triaged would block every PR on unreviewed findings. Results go to the Security tab; promote to blocking once triaged | `.github/workflows/sast.yml` |
+| 9 pre-existing `react-hooks` correctness errors in the frontend | Surfaced by SEC-SAST's new ESLint config (rules new in eslint-plugin-react-hooks v7). Real technical debt, but not security findings — set to `warn` so they're visible without blocking unrelated PRs | `frontend/eslint.config.js` |
 | Mail server EC2 has no ongoing OS patch cadence | `package_update`/`package_upgrade` run once at boot; nothing re-patches afterward | `docs/threat-model.md` §4 |
 | Retention policy covers only the `detections` table | Mailbox content on the mail server has no retention policy; purged rows persist in RDS's 7-day backup window regardless | `docs/data-retention-privacy.md` §5 |
 | This threat model's team review | M9-T3's own acceptance criterion — needs an actual teammate, not something a code change closes | `docs/threat-model.md` §4 |

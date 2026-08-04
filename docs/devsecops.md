@@ -59,15 +59,28 @@ Each suppression carries a one-line rationale at the resource in the Terraform, 
 
 Static Application Security Testing analyses our **own source code** (the IaC scans above only cover Terraform). SAST runs on every PR and is **shift-left / merge-blocking** on high-severity findings. Results are uploaded as **SARIF to the GitHub Security tab**.
 
-| Target | Tool | Catches |
-|---|---|---|
-| Python — API, `m6_inference.py`, extraction | **Bandit** + **Semgrep** (`p/python`, `p/owasp-top-ten`) | injection, unsafe deserialization, hardcoded secrets, `eval`/`subprocess` misuse |
-| Python — deep dataflow | **CodeQL** (`python`) | taint-tracking vulns across functions |
-| React / TypeScript dashboard | **Semgrep** (`p/javascript`, `p/react`) + **eslint-plugin-security** | DOM-XSS sinks, `dangerouslySetInnerHTML`, prototype pollution |
-| Secrets (full git history) | **gitleaks** | leaked keys/tokens beyond GitHub's native push-protection |
-| Quality + security gate | **SonarCloud** (hosted SonarQube — free for public repos) | bugs, code smells, security hotspots, coverage + quality gate on PRs |
+| Target | Tool | Catches | Status |
+|---|---|---|---|
+| Python — API, `m6_inference.py`, extraction | **Bandit** + **Semgrep** (`p/python`, `p/owasp-top-ten`) | injection, unsafe deserialization, hardcoded secrets, `eval`/`subprocess` misuse | **implemented** — `sast.yml`, blocking |
+| Python — deep dataflow | **CodeQL** (`python`) | taint-tracking vulns across functions | **implemented** — `sast.yml`, reported not blocking (see gate below) |
+| React / TypeScript dashboard | **Semgrep** (`p/javascript`, `p/react`) + **eslint-plugin-security** | DOM-XSS sinks, `dangerouslySetInnerHTML`, prototype pollution | **implemented** — `sast.yml`, blocking |
+| JS/TS — deep dataflow | **CodeQL** (`javascript-typescript`) | taint-tracking vulns across modules | **implemented** — `sast.yml`, reported not blocking |
+| Secrets (full git history) | **gitleaks** | leaked keys/tokens beyond GitHub's native push-protection | **implemented** — `sast.yml`, blocking, `fetch-depth: 0` |
+| Dependency CVEs | **pip-audit**, **npm audit** | known-vulnerable packages | **implemented** — `sast.yml`, blocking on HIGH |
+| Workflow correctness | **actionlint** | invalid expression contexts that fail at run time with no usable log | **implemented** — `sast.yml`, blocking |
+| Quality + security gate | **SonarCloud** (hosted SonarQube — free for public repos) | bugs, code smells, security hotspots, coverage + quality gate on PRs | **not implemented** — the one remaining item from this section's original intent |
 
-**Gate:** any **HIGH/CRITICAL** SAST finding blocks the PR merge. Findings are triaged; accepted risks get an inline suppression with a one-line justification (same convention as the IaC baseline in §3.1).
+**Gate:** any **HIGH/CRITICAL** finding from Bandit, Semgrep, gitleaks, eslint, pip-audit, or npm audit blocks the PR merge. Findings are triaged; accepted risks get an inline suppression with a one-line justification (same convention as the IaC baseline in §3.1).
+
+**CodeQL is reported but not blocking, deliberately.** `security-extended` is a broad query set and this is its first run against the codebase — gating on it before anyone has triaged a baseline would block every PR on findings nobody has looked at yet, which is how a gate gets routed around instead of respected. Results still upload to the Security tab. Promote it to blocking once a baseline is triaged.
+
+**Two calibration decisions in the frontend lint config** (`frontend/eslint.config.js`), both documented inline there:
+- `security/detect-object-injection` runs at **warn**, not error: it fires on any `obj[key]` with a non-literal key — 17 hits here, all ordinary array indexing and `Record` lookups on internally-derived keys, none attacker-controlled. Erroring would demand 17 suppressions of non-issues and train everyone to add suppressions reflexively.
+- `react-hooks/set-state-in-effect`, `purity`, and `refs` run at **warn**: they flag 9 genuine but pre-existing correctness issues (these rules are new in eslint-plugin-react-hooks v7). They're real technical debt worth fixing, but they aren't security findings, and erroring on them would have blocked every unrelated PR the moment this landed.
+
+`dangerouslySetInnerHTML` is a hard **error** via `no-restricted-syntax` — the dashboard renders attacker-controlled content (an email's subject and sender come from whoever sent the mail), so that's the one sink genuinely worth failing a PR over. Verified by probe: the rule fires and exits non-zero on a test component that uses it.
+
+**gitleaks allowlist:** one entry in `.gitleaks.toml` for AWS Route53 hosted zone IDs, which trip the entropy-based `generic-api-key` rule. They're public DNS identifiers, not credentials, and are already committed in plain sight as Terraform variable defaults. Scoped to the zone-ID shape rather than allowlisting the file — verified by probe that a real AWS key, GitHub PAT, or Slack token in the same file still fails the scan.
 
 ### 3.3 Application Security Testing — DAST
 
@@ -85,15 +98,21 @@ Dynamic Application Security Testing exercises the **running** service, so it ru
 
 **Known trade-off, accepted deliberately (§4.1 — shared backend):** Schemathesis fuzzes `/analyze/email` with generated bodies against the one real `detections` table shared by dev and the naratech-promoted frontend. `submitted_by` is a client-supplied field, not derived from the auth token, so fuzzer-generated rows aren't reliably queryable by identity. Bounded via `--max-examples` and scheduled at low-traffic hours; review/clear obviously-fuzzed rows before a demo.
 
-**Also not yet implemented from §3.2:** Semgrep, CodeQL, gitleaks, and SonarCloud. Bandit + pip-audit + npm audit (`sast.yml`) cover the PR-blocking gate for what exists today; the rest is a real gap versus the intent of this section, not an oversight to gloss over.
+**Remaining gap from §3.2:** SonarCloud. Semgrep, CodeQL, gitleaks, and eslint-plugin-security all landed with SEC-SAST; SonarCloud is the one item from that section's original intent still outstanding.
 
 ### 3.4 Where each control runs
 
 ```
-PR opened ──► SAST (Bandit, pip-audit, npm audit)                        [BLOCKS MERGE, sast.yml]
-          └─► IaC (Checkov, tfsec)                                        [BLOCKS MERGE, terraform-pr.yml]
+PR opened ──► SAST      (Bandit, Semgrep, eslint+security, actionlint)   [BLOCKS MERGE, sast.yml]
+          ├─► Deps      (pip-audit, npm audit)                            [BLOCKS MERGE, sast.yml]
+          ├─► Secrets   (gitleaks, full git history)                      [BLOCKS MERGE, sast.yml]
+          ├─► CodeQL    (python, javascript-typescript)                   [reports to Security tab, not blocking yet]
+          └─► IaC       (Checkov, tfsec)                                  [BLOCKS MERGE, terraform-pr.yml]
 merge to dev ──► terraform apply + ECS deploy ──► DAST passive (ZAP baseline, dast-baseline.yml)
-nightly ──────► DAST full (ZAP active scan, Schemathesis fuzz)            [dast-nightly.yml]
+nightly ──────► DAST full (ZAP active, Schemathesis fuzz, testssl.sh,
+                           swaks relay/spoof tests)                       [dast-nightly.yml]
+on demand ────► authenticated dashboard scan (ZAP + Cognito token)        [zap-dashboard-auth.yml]
+daily 07:00 ──► detection retention purge (180d)                          [ECS scheduled task, M9-T7]
 PR targeting naratech ──► naratech-promotion-gate.yml reads the latest
                           nightly conclusion; fails the PR if it wasn't green
 ```

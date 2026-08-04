@@ -84,7 +84,7 @@ jobs:
         working-directory: backend
 
   frontend-audit:
-    name: npm audit
+    name: npm audit + eslint
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
@@ -107,6 +107,117 @@ jobs:
         run: npm audit --audit-level=high
         working-directory: frontend
 
+      # SEC-SAST — eslint-plugin-security + a hard block on
+      # dangerouslySetInnerHTML. The dashboard renders attacker-controlled
+      # content (an email's subject/sender come from whoever sent the mail),
+      # so DOM-XSS sinks are the class of bug most worth failing a PR over.
+      # Config and the reasoning behind each severity choice live in
+      # frontend/eslint.config.js. Errors block; warnings (react-hooks debt,
+      # detect-object-injection noise) stay visible without blocking.
+      - name: eslint (incl. eslint-plugin-security)
+        run: npm run lint
+        working-directory: frontend
+
+  # SEC-SAST — Semgrep. Complements Bandit: Bandit is Python-only and
+  # pattern-based, Semgrep adds the OWASP Top Ten rulesets and covers the
+  # React/TS frontend too. --severity ERROR only, matching the §3.2 gate
+  # ("HIGH/CRITICAL blocks the PR"); WARNING/INFO findings are printed but
+  # don't fail. Verified clean against the current tree at this threshold
+  # before being made blocking.
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Semgrep
+        run: python -m pip install --upgrade pip semgrep
+
+      # --metrics off: don't phone home from CI. Registry rulesets (p/...) are
+      # still fetched, which needs network but no account or token.
+      - name: Semgrep — Python (backend)
+        if: needs.changes.outputs.backend == 'true'
+        run: |
+          semgrep scan --config p/python --config p/owasp-top-ten \
+            --severity ERROR --metrics off --error \
+            backend/ notebooks/M4/m4_t3_url_features.py
+
+      - name: Semgrep — JavaScript/React (frontend)
+        if: needs.changes.outputs.frontend == 'true'
+        run: |
+          semgrep scan --config p/javascript --config p/react \
+            --severity ERROR --metrics off --error \
+            frontend/src
+
+  # SEC-SAST — gitleaks over the FULL git history. This is the gap GitHub's
+  # native push protection cannot cover: it only inspects new pushes, so
+  # anything committed before it was enabled stays invisible to it. Needs
+  # fetch-depth: 0 -- the default shallow clone would scan one commit and
+  # report a clean history that was never actually checked.
+  #
+  # Run as the binary rather than gitleaks-action, which requires a paid
+  # GITLEAKS_LICENSE for organisation-owned repos.
+  gitleaks:
+    name: gitleaks (full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      # --redact so a real finding doesn't get re-leaked into the CI log,
+      # which is world-readable on a public repo.
+      - name: gitleaks (git history secret scan)
+        run: gitleaks git --no-banner --redact -v -c .gitleaks.toml .
+
+  # SEC-SAST — CodeQL. Deeper than Bandit/Semgrep's pattern matching: it does
+  # taint tracking across functions, catching flows those miss. Free here
+  # because the repo is public. Results upload to the GitHub Security tab as
+  # SARIF, which is why security-events: write is needed.
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["python", "javascript-typescript"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      # No autobuild step: both languages here are interpreted, so CodeQL
+      # extracts straight from source. autobuild on a repo with a Dockerfile
+      # can wander off trying to build the container instead.
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+
   # `changes` + these two conditional jobs means a PR touching only
   # infra/ or docs/ reports no SAST status at all -- required-checks lists
   # would then hang the way terraform-pr.yml's did before its own `changes`
@@ -116,13 +227,29 @@ jobs:
   sast-gate:
     name: SAST + dependency scan
     runs-on: ubuntu-latest
-    needs: [changes, python-sast, frontend-audit, actionlint]
+    needs: [changes, python-sast, frontend-audit, actionlint, semgrep, gitleaks, codeql]
     if: always()
     steps:
+      # CodeQL is reported but deliberately NOT blocking: security-extended is
+      # a broad query set and this is its first run against the codebase, so
+      # gating on it before anyone has triaged a baseline would block every PR
+      # on findings nobody has looked at yet. Its results land in the Security
+      # tab regardless. Promote it to blocking once a baseline is triaged.
       - name: Check results
         run: |
-          if [ "${{ needs.python-sast.result }}" == "failure" ] || [ "${{ needs.frontend-audit.result }}" == "failure" ] || [ "${{ needs.actionlint.result }}" == "failure" ]; then
-            echo "A SAST, dependency, or workflow-lint check failed." >&2
+          FAILED=""
+          [ "${{ needs.python-sast.result }}"    == "failure" ] && FAILED="$FAILED bandit/pip-audit"
+          [ "${{ needs.frontend-audit.result }}" == "failure" ] && FAILED="$FAILED npm-audit/eslint"
+          [ "${{ needs.actionlint.result }}"     == "failure" ] && FAILED="$FAILED actionlint"
+          [ "${{ needs.semgrep.result }}"        == "failure" ] && FAILED="$FAILED semgrep"
+          [ "${{ needs.gitleaks.result }}"       == "failure" ] && FAILED="$FAILED gitleaks"
+
+          if [ "${{ needs.codeql.result }}" == "failure" ]; then
+            echo "::warning::CodeQL reported findings — see the Security tab. Not blocking yet (see comment in sast.yml)."
+          fi
+
+          if [ -n "$FAILED" ]; then
+            echo "::error::Blocking SAST/dependency check(s) failed:$FAILED"
             exit 1
           fi
-          echo "OK — no HIGH findings in scans that ran (backend changed: ${{ needs.changes.outputs.backend }}, frontend changed: ${{ needs.changes.outputs.frontend }})."
+          echo "OK — no blocking findings (backend changed: ${{ needs.changes.outputs.backend }}, frontend changed: ${{ needs.changes.outputs.frontend }})."
