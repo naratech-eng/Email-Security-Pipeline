@@ -66,7 +66,7 @@ Trust boundaries:
 | Attacker tampers with email body in transit | Tampering | Low | Medium | TLS on inbound SMTP (`smtpd_tls_security_level = may`) with a real Let's Encrypt cert; DKIM verification catches signed-mail tampering | **M7-T17** (cert), **M9-T0** (verification). `testssl.sh` scans the mail submission/IMAPS listeners nightly (**M9-T5**) |
 | Attacker tampers with model artifact in S3 | Tampering | Low | High | S3 versioning, KMS encryption, account-wide public-access block; ECS task IAM role scoped read-only to the specific models bucket | M6-T7 (artifact registry), SEC-T3 |
 | Operator denies they took an action on a flagged email | Repudiation | Low | Low | Detection rows are attributed by the caller's *verified* identity (`derive_provenance`), not a client-supplied field — a Cognito analyst's `sub`/`username` claim, or `source=server` for the mail path. This was tightened specifically because a client-supplied `source`/`submitted_by` let any authenticated caller (or a fuzzer with a token) write into the wrong feed under any name | M7-T13 |
-| Detection logs leak email contents | Information Disclosure | Medium | High | RDS encrypted at rest (KMS) and in transit (TLS), private-subnet + security-group isolated, IAM DB auth enabled. **Retention/scrubbing policy is NOT yet implemented** — email bodies are stored indefinitely today | Encryption/isolation: M7 infra. Retention policy: **M9-T7 (not started)** — real gap, not glossed over |
+| Detection logs leak email metadata | Information Disclosure | Medium | Medium | RDS encrypted at rest (KMS) and in transit (TLS), private-subnet + security-group isolated, IAM DB auth enabled. Raw email body/attachment content was never stored in the first place (verified against the schema — only subject, addresses, extracted URLs, and 5 numeric features). 180-day retention policy purges the metadata that *is* stored (subject, addresses) via a daily scheduled task | Encryption/isolation: M7 infra. Retention: **M9-T7** (`docs/data-retention-privacy.md`, `retention_purge.py` + `aws_scheduler_schedule.retention_purge`) |
 | Inference service is overwhelmed by very large or many emails | Denial of Service | Medium | Medium | 2MB request body cap (`MAX_EMAIL_BYTES`), milter request timeout (45s) with fail-open re-injection, circuit breaker on repeated API failures | Body cap/circuit breaker: M7-T16. **No rate-limiting WAF rule configured** — the M9-T4 WAF only has the three AWS managed content-inspection rule groups, no rate-based rule — residual gap |
 | Open relay allows spam to be sent through us | Elevation of Privilege | Medium | High | Port 25 receive-only (`reject_unauth_destination`); relay only via authenticated submission on :587 (`permit_sasl_authenticated,reject`) | **M9-T2**. Verified nightly, not just at config-review time: `mail-relay-test` actively attempts an unauthenticated relay and asserts `554 5.7.1` (**M9-T5**) |
 | Attacker pivots from dashboard/API to host shell | Elevation of Privilege | Low | Critical | No shell endpoints; API runs as non-root `appuser` in an ECS Fargate task (no persistent host, no SSH surface); least-privilege task IAM role | M7-T7 (containerize + deploy) |
@@ -90,7 +90,8 @@ Trust boundaries:
 - [x] CloudTrail + AWS Config baseline — **M9-T4**
 - [x] CloudWatch alarms on ALB/RDS health — **M9-T4**
 - [x] Mail relay/spoof and TLS posture checked automatically, not just manually — **M9-T5**
-- [ ] Detection log retention/scrubbing policy — **M9-T7, not started**
+- [x] Detection log retention policy defined and enforced (180 days, daily scheduled purge) — **M9-T7** (`docs/data-retention-privacy.md`)
+- [x] Documented security decisions & compliance posture, consolidated in one place — **M9-T6** (`docs/security-decisions.md`)
 - [ ] GuardDuty + Security Hub — **permanently blocked on this AWS account** (§3, devsecops.md §6), not a pending item
 - [ ] WAF flipped from COUNT to actually blocking — pending a baseline run with no false positives
 - [ ] Rate-limiting on the public ALB/WAF — not configured, residual DoS gap
@@ -102,13 +103,13 @@ Trust boundaries:
 
 For the capstone, we treat compliance as a documentation exercise:
 - We do not handle regulated personal data of real users.
-- We acknowledge that a production deployment would need to consider GDPR / PIPEDA / sector-specific requirements before processing real user mail — this is exactly what the open retention-policy item above (M9-T7) needs to define.
+- We acknowledge that a production deployment would need to consider GDPR / PIPEDA / sector-specific requirements before processing real user mail — see `docs/data-retention-privacy.md` (M9-T7) for what's implemented (a 180-day metadata purge) versus what a real deployment would still need (legal basis review, subject access/deletion requests, breach notification).
 - Datasets used are publicly available and used for academic purposes only.
 
 ## 6. Residual Risks
 
 - Adversarial phishing crafted specifically against our model is hard to fully eliminate; no task currently owns ongoing retraining/drift monitoring.
-- Detection logs retain full email content indefinitely — no retention/scrubbing policy exists yet (M9-T7). This is the single largest gap between this document and a real production posture.
+- Retention (M9-T7) covers only the `detections` table (subject/addresses/metadata, never the raw body). Mailbox content on the mail server itself has no retention policy, and purged `detections` rows persist in RDS's 7-day automated backups until those age out — a real data-subject deletion request isn't fully honored by the scheduled purge alone.
 - GuardDuty/Security Hub cannot run on this AWS account tier — CloudTrail/Config/CloudWatch alarms cover the same ground manually (someone has to look), but there's no automated threat-detection layer.
 - WAF is observe-only (COUNT mode); a real attack today would be logged but not blocked until it's flipped to block mode.
 - No rate-limiting exists at the WAF/ALB layer — a volumetric attack against the public API is bounded only by the 2MB body cap and normal AWS infrastructure limits, not an explicit control.
