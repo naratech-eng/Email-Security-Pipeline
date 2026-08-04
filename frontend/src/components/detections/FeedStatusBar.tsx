@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Pause, Play, RotateCw, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDetectionsFeed, STALE_AFTER_MS } from '@/feed/DetectionsFeedProvider';
+import { useNow } from '@/hooks/useNow';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { formatRelative } from '@/lib/format';
-import { prefersReducedMotion } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 /**
@@ -17,18 +17,15 @@ import { cn } from '@/lib/utils';
  */
 export function FeedStatusBar({ className }: { className?: string }) {
   const { live, isPaused, setPaused, refreshNow } = useDetectionsFeed();
-  const [, forceTick] = useState(0);
 
-  // Re-render every 5s so "updated N seconds ago" stays honest between polls.
-  useEffect(() => {
-    const id = window.setInterval(() => forceTick((t) => t + 1), 5_000);
-    return () => window.clearInterval(id);
-  }, []);
+  // Re-read the clock every 5s so "updated N seconds ago" stays honest
+  // between polls.
+  const now = useNow();
 
-  const age = live.fetchedAt === null ? null : Date.now() - live.fetchedAt;
+  const age = live.fetchedAt === null ? null : now - live.fetchedAt;
   const isStale =
     live.error !== null || isPaused || (age !== null && age > STALE_AFTER_MS);
-  const still = prefersReducedMotion();
+  const still = useReducedMotion();
 
   let status: string;
   if (live.fetchedAt === null) {

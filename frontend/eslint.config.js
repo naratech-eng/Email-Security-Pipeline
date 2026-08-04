@@ -35,17 +35,11 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
-      // react-hooks v7 added set-state-in-effect / purity / refs, which flag 9
-      // real (but pre-existing) correctness issues in code written before this
-      // config existed. They are genuine technical debt and worth fixing --
-      // but they are NOT security findings, and this workflow's job is the
-      // §3.2 security gate. Erroring on them would block every unrelated PR
-      // the moment this lands, which is how a gate gets bypassed rather than
-      // respected. Downgraded to warnings so they stay visible; tracked
-      // separately for a proper fix rather than silently disabled.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/purity': 'warn',
-      'react-hooks/refs': 'warn',
+      // react-hooks v7 correctness rules. The 9 pre-existing violations these
+      // surfaced are fixed, so they gate at error to keep the class of bug out.
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/purity': 'error',
+      'react-hooks/refs': 'error',
 
       // detect-object-injection fires on ANY obj[key] with a non-literal key
       // -- 17 hits here, all ordinary array indexing and Record lookups on

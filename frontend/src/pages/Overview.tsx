@@ -6,12 +6,12 @@ import { StatTile } from '@/components/overview/StatTile';
 import { SystemStatusCard } from '@/components/overview/SystemStatusCard';
 import { VerdictDonut } from '@/components/overview/VerdictDonut';
 import { useDetectionsFeed, STALE_AFTER_MS } from '@/feed/DetectionsFeedProvider';
+import { useNow } from '@/hooks/useNow';
 import { useOverviewStats } from '@/hooks/useOverviewStats';
 import { STATS_WINDOWS, type StatsWindow } from '@/lib/api';
 import { formatRelative } from '@/lib/format';
 import { verdictMeta } from '@/lib/verdict';
 import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
 
 /**
  * The Overview wall — orchestration only; every surface owns its own state.
@@ -46,15 +46,11 @@ export default function Overview() {
   } = useOverviewStats();
   const { live } = useDetectionsFeed();
 
-  // Re-render every 5s so relative freshness text stays truthful between polls
-  // — the same interval FeedStatusBar uses for the same reason.
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const id = window.setInterval(() => tick((t) => t + 1), 5_000);
-    return () => window.clearInterval(id);
-  }, []);
+  // Re-read the clock every 5s so relative freshness text stays truthful
+  // between polls — the same interval FeedStatusBar uses for the same reason.
+  const now = useNow();
 
-  const feedAge = live.fetchedAt === null ? null : Date.now() - live.fetchedAt;
+  const feedAge = live.fetchedAt === null ? null : now - live.fetchedAt;
   const isStale = live.error !== null || (feedAge !== null && feedAge > STALE_AFTER_MS);
   const basis = stats?.windowLabel ?? 'unavailable';
 

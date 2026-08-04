@@ -26,6 +26,12 @@ interface EmailComposerProps {
 
 type Mode = 'paste' | 'file';
 
+/** The one input the API accepts, assembled from whichever mode is active. */
+function buildInput(mode: Mode, text: string, file: File | null): EmailInput | null {
+  if (mode === 'paste') return text.trim() ? { mode: 'paste', text } : null;
+  return file ? { mode: 'file', file } : null;
+}
+
 /**
  * The intake surface: paste a raw email or drop an .eml.
  *
@@ -41,37 +47,50 @@ export function EmailComposer({ onSubmit, busy, initialInput }: EmailComposerPro
   const [file, setFile] = useState<File | null>(
     initialInput?.mode === 'file' ? initialInput.file : null,
   );
-  const [issue, setIssue] = useState<ValidationIssue | null>(null);
-  const [checking, setChecking] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const input: EmailInput | null =
+  const input = buildInput(mode, text, file);
+
+  // Identity of what we're validating. `input` is rebuilt every render, so it
+  // can't be compared by reference; a file is identified by the fields that
+  // change when the analyst picks a different one.
+  const inputKey =
     mode === 'paste'
-      ? text.trim()
-        ? { mode: 'paste', text }
-        : null
-      : file
-        ? { mode: 'file', file }
-        : null;
+      ? `paste:${text}`
+      : `file:${file?.name ?? ''}:${file?.size ?? ''}:${file?.lastModified ?? ''}`;
 
   // Validate as the input changes, not only on submit, so the disabled submit
   // button is itself the feedback and nothing is discovered after a 40s wait.
+  //
+  // Only the settled answer is stored, tagged with the input it describes.
+  // "Currently checking" is then derived — it's exactly "the stored answer is
+  // for a different input than the one on screen" — rather than being a second
+  // state field flipped on from inside the effect. That also removes a stale
+  // read the old split allowed: `issue` kept describing the *previous* input
+  // for one render after a keystroke, so a blocking issue could briefly be
+  // reported against text the analyst had already replaced.
+  const [checked, setChecked] = useState<{
+    key: string;
+    issue: ValidationIssue | null;
+  } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    setChecking(true);
-    void validateEmailInput(input).then((result) => {
-      if (!cancelled) {
-        setIssue(result);
-        setChecking(false);
-      }
+    // Rebuilt from the primitives rather than closing over the render-scoped
+    // `input`, which is a fresh object every render and would re-run this on
+    // every one.
+    void validateEmailInput(buildInput(mode, text, file)).then((result) => {
+      if (!cancelled) setChecked({ key: inputKey, issue: result });
     });
     return () => {
       cancelled = true;
     };
-    // `input` is rebuilt each render; the primitive identity of its parts is
-    // what actually changes.
-  }, [mode, text, file]);
+  }, [mode, text, file, inputKey]);
+
+  const settled = checked?.key === inputKey ? checked : null;
+  const checking = settled === null;
+  const issue = settled?.issue ?? null;
 
   const blocked = !input || issue?.level === 'blocking' || checking;
   const bytes = input ? inputSize(input) : 0;

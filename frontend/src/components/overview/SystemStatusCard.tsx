@@ -2,6 +2,7 @@ import { CircleCheck, CircleHelp, CircleMinus, type LucideIcon } from 'lucide-re
 import { useAuth } from '@/auth/AuthProvider';
 import { useDetectionsFeed } from '@/feed/DetectionsFeedProvider';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useNow } from '@/hooks/useNow';
 import { formatRelative } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { OverviewStats } from '@/lib/types';
@@ -56,6 +57,12 @@ export function SystemStatusCard({ stats, loading, isDegraded }: SystemStatusCar
   const { live } = useDetectionsFeed();
   const { user } = useAuth();
 
+  // The pipeline row flips to "quiet" purely by the passage of time, so it
+  // needs the clock as a live input — otherwise the row only re-evaluates when
+  // something else happens to re-render the card, and can sit on "ok" long
+  // after the mail server has actually gone silent.
+  const now = useNow();
+
   const feedOk = live.fetchedAt !== null && live.error === null;
   const aggregateOk = stats !== null && !isDegraded;
 
@@ -63,7 +70,7 @@ export function SystemStatusCard({ stats, loading, isDegraded }: SystemStatusCar
   // window can hold zero server rows while the pipeline is perfectly healthy,
   // so a null here on the degraded path means "can't tell", not "quiet".
   const serverAt = aggregateOk ? stats.newestServerAt : null;
-  const serverAgeMs = serverAt ? Date.now() - Date.parse(serverAt) : null;
+  const serverAgeMs = serverAt ? now - Date.parse(serverAt) : null;
 
   const rows: Row[] = [
     {
