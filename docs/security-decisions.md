@@ -61,14 +61,22 @@ Everything below is a genuine gap — listed here once, in one place, rather tha
 | GuardDuty / Security Hub disabled | Permanent AWS account-tier limitation, not fixable in this project | `docs/devsecops.md` §6 |
 | WAF in COUNT mode, not blocking | Pending a baseline run confirming no false positives against real traffic | `infra/modules/waf` (`block_mode` var) |
 | No rate-limiting on the public ALB/WAF | Not configured — a volumetric attack is bounded only by the 2MB body cap and normal AWS limits | `docs/threat-model.md` §6 |
-| SonarCloud not implemented | The one item left from §3.2's original intent. Semgrep, CodeQL, gitleaks, and eslint-plugin-security all landed with SEC-SAST | `docs/devsecops.md` §3.2 |
 | CodeQL reported but not blocking | `security-extended` is broad and this is its first run — gating before a baseline is triaged would block every PR on unreviewed findings. Results go to the Security tab; promote to blocking once triaged | `.github/workflows/sast.yml` |
+| **No pre-commit hooks** — highest-value remaining fix | Every control fires *after* a push to a public repo. For secrets that's too late: a pushed credential must be treated as compromised and rotated regardless of later removal. gitleaks as a pre-commit hook prevents rather than reports | `docs/devsecops.md` §3.5 |
+| Trivy image scan runs post-merge, not on the PR | A HIGH CVE in a base image passes all PR checks, merges, then fails `backend-deploy.yml` — a revert under pressure instead of another commit | `docs/devsecops.md` §3.5 |
+| Python dependencies unpinned (`>=`, not `==`) | Two builds of the same commit can install different versions; a compromised upstream release lands with no code change to review. Needs `==` pins + a hash-checked lockfile; Dependabot then keeps them current | `backend/requirements.txt`, `docs/devsecops.md` §3.5 |
+| No SBOM | "Are we affected by CVE-X?" is answered by re-scanning rather than querying an inventory. Trivy can emit CycloneDX/SPDX at build time | `docs/devsecops.md` §3.5 |
+| No Python formatter/linter (`ruff`/`black`) | Bandit + Semgrep cover the security half of Python static analysis; style and general-correctness linting is unenforced | `docs/devsecops.md` §3, §7 |
+| SonarCloud needs one-time `SONAR_TOKEN` setup | Implemented and wired, but the SonarCloud project import + token generation are manual steps requiring a human with GitHub org access. Workflow skips cleanly until then | `sonar-project.properties` |
+| Test coverage is low (frontend 2.6%, backend ~41%) | Only `overviewStats.ts` has frontend tests; the UI layer has none. Sonar's gate is scoped to *new* code so this doesn't block, but the absolute number is genuinely low | `docs/devsecops.md` §3.2 |
 | Mail server EC2 has no ongoing OS patch cadence | `package_update`/`package_upgrade` run once at boot; nothing re-patches afterward | `docs/threat-model.md` §4 |
 | Retention policy covers only the `detections` table | Mailbox content on the mail server has no retention policy; purged rows persist in RDS's 7-day backup window regardless | `docs/data-retention-privacy.md` §5 |
 | This threat model's team review | M9-T3's own acceptance criterion — needs an actual teammate, not something a code change closes | `docs/threat-model.md` §4 |
 
 ### Closed since
 
+- **SonarCloud (SEC-SONAR).** The last outstanding tool from `devsecops.md` §3.2. `sonarcloud.yml` + `sonar-project.properties`, with backend (`pytest-cov`) and frontend (`@vitest/coverage-v8`) coverage wired in — its distinct contribution over the other scanners is the coverage gate on new code. Still needs a one-time `SONAR_TOKEN` (tracked above as an open item).
+- **Dependabot and the PR template.** Both were *described* in `devsecops.md` (§3's dep-scan row, §7's code hygiene) since M9 but neither file existed, so neither was ever running. `.github/dependabot.yml` and `.github/pull_request_template.md` now exist. Caught while auditing §3.2's claims against reality for SEC-SONAR.
 - **9 pre-existing `react-hooks` correctness errors in the frontend.** Surfaced by SEC-SAST's new ESLint config (`set-state-in-effect`, `purity`, `refs`, all new in eslint-plugin-react-hooks v7) and initially landed as `warn` so they wouldn't block unrelated PRs. All nine are now fixed at the source — no suppressions — and the three rules gate at `error` in `frontend/eslint.config.js`. The impure render-time reads (`Date.now()`, `matchMedia`) became the `useNow` / `useReducedMotion` hooks; the rest were resolved by deriving state during render instead of writing it from an effect.
 
 ## 7. Where to look for more

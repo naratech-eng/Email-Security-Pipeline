@@ -1,0 +1,59 @@
+# docs/devsecops.md §3 lists Dependabot as part of the dependency-scan gate,
+# but no config existed until now -- so it was never actually running. This
+# closes that gap.
+#
+# Dependabot complements pip-audit/npm audit rather than repeating them: those
+# tell you a vulnerable version is installed, Dependabot opens the PR that
+# upgrades it. Without this, a CVE surfaced by pip-audit blocks every PR until
+# someone manually bumps the pin.
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, security]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, security]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # One PR for the whole dev-tooling set instead of ~15 separate ones.
+      # eslint/vitest/types churn frequently and are low-risk to move together;
+      # runtime deps stay ungrouped so each gets reviewed on its own.
+      dev-tooling:
+        dependency-type: development
+        patterns: ["*"]
+
+  # Keeps the pinned action versions current -- this repo pins several
+  # (actionlint 1.7.12, gitleaks 8.30.1, trivy-action, zap actions), and a
+  # pinned-and-forgotten scanner silently stops catching new rules.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, security]
+    commit-message:
+      prefix: "chore(deps)"
