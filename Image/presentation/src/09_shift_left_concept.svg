@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+
+  <text x="60" y="70" font-size="40" font-weight="bold" fill="#2E1065">Shift-Left Security — The Core Idea</text>
+  <text x="60" y="112" font-size="25" fill="#6B7280">The later a flaw is found, the more it costs to fix. So move every check as early as it can run.</text>
+
+  <!-- baseline -->
+  <line x1="130" y1="640" x2="1520" y2="640" stroke="#D4D4D8" stroke-width="3"/>
+
+  <!-- cost curve bars -->
+  <!-- 1 editor -->
+  <rect x="200" y="610" width="140" height="30" rx="6" fill="#10B981"/>
+  <text x="270" y="596" font-size="22" font-weight="bold" fill="#059669" text-anchor="middle">1×</text>
+  <!-- 2 PR -->
+  <rect x="420" y="570" width="140" height="70" rx="6" fill="#34D399"/>
+  <text x="490" y="556" font-size="22" font-weight="bold" fill="#059669" text-anchor="middle">~5×</text>
+  <!-- 3 merge -->
+  <rect x="640" y="520" width="140" height="120" rx="6" fill="#FBBF24"/>
+  <text x="710" y="506" font-size="22" font-weight="bold" fill="#B45309" text-anchor="middle">~10×</text>
+  <!-- 4 nightly -->
+  <rect x="860" y="450" width="140" height="190" rx="6" fill="#F59E0B"/>
+  <text x="930" y="436" font-size="22" font-weight="bold" fill="#B45309" text-anchor="middle">~25×</text>
+  <!-- 5 production -->
+  <rect x="1080" y="360" width="140" height="280" rx="6" fill="#EF4444"/>
+  <text x="1150" y="346" font-size="22" font-weight="bold" fill="#B91C1C" text-anchor="middle">~100×</text>
+  <!-- 6 breach -->
+  <rect x="1300" y="260" width="140" height="380" rx="6" fill="#991B1B"/>
+  <text x="1370" y="246" font-size="22" font-weight="bold" fill="#991B1B" text-anchor="middle">Unbounded</text>
+
+  <!-- stage labels -->
+  <g text-anchor="middle" fill="#2E1065" font-size="21" font-weight="bold">
+    <text x="270" y="676">Editor /</text><text x="270" y="700">pre-commit</text>
+    <text x="490" y="676">Pull</text><text x="490" y="700">Request</text>
+    <text x="710" y="676">Merge</text><text x="710" y="700">to dev</text>
+    <text x="930" y="676">Nightly</text><text x="930" y="700">scan</text>
+    <text x="1150" y="676">Production</text><text x="1150" y="700">incident</text>
+    <text x="1370" y="676">Breach /</text><text x="1370" y="700">disclosure</text>
+  </g>
+
+  <!-- our gates band -->
+  <rect x="130" y="730" width="900" height="96" rx="14" fill="#F3E8FF" stroke="#7C3AED" stroke-width="3"/>
+  <text x="580" y="768" font-size="25" font-weight="bold" fill="#2E1065" text-anchor="middle">WHERE THIS PROJECT&#8217;S GATES RUN</text>
+  <text x="580" y="802" font-size="22" fill="#52525B" text-anchor="middle">20 tools across 4 stages &#183; a HIGH finding stops the change here</text>
+
+  <rect x="1060" y="730" width="460" height="96" rx="14" fill="#FEE2E2" stroke="#DC2626" stroke-width="3"/>
+  <text x="1290" y="768" font-size="25" font-weight="bold" fill="#991B1B" text-anchor="middle">WHAT WE ARE AVOIDING</text>
+  <text x="1290" y="802" font-size="22" fill="#7F1D1D" text-anchor="middle">Finding it from an attacker, not a scanner</text>
+
+  <!-- arrow -->
+  <path d="M 200 210 L 1440 210" stroke="#7C3AED" stroke-width="4" fill="none" marker-end="url(#a09)"/>
+  <defs>
+    <marker id="a09" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7C3AED"/>
+    </marker>
+  </defs>
+  <text x="200" y="190" font-size="23" font-weight="bold" fill="#7C3AED">Cheap to fix &#183; small blast radius</text>
+  <text x="1440" y="190" font-size="23" font-weight="bold" fill="#DC2626" text-anchor="end">Expensive &#183; public &#183; possibly unrecoverable</text>
+</svg>
