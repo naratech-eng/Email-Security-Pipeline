@@ -129,7 +129,9 @@ jobs:
 
       - name: SonarCloud scan
         if: steps.guard.outputs.configured == 'true'
-        uses: SonarSource/sonarqube-scan-action@v5
+        # v5 is flagged by GitHub as containing a known security
+        # vulnerability -- caught from the first real run's own annotations.
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
