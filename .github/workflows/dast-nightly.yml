@@ -37,7 +37,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       # Unauthenticated for now: ZAP's authenticated-request replacer config
       # needs an actual Docker run to validate the header injection, which
@@ -48,7 +48,7 @@ jobs:
       - name: ZAP full active scan
         # v0.13.0 is action-full-scan's latest -- it does NOT share a version
         # number with action-baseline (which is at v0.15.0). Both are node24.
-        uses: zaproxy/action-full-scan@v0.13.0
+        uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c # v0.13.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ env.TARGET }}
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Schemathesis
-        run: pip install schemathesis
+        run: pip install schemathesis==4.24.3
 
 # Checks are chosen deliberately, NOT `all`. The first real run showed `all`
       # blocks on two non-security classes:
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload fuzz reports
         if: always()
-        uses: actions/upload-artifact@v7 # v4 is still node20 (deprecated); v7 is node24
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7 -- v4 is still node20 (deprecated); v7 is node24
         with:
           name: schemathesis-reports
           path: "*-report.xml"
@@ -205,7 +205,7 @@ jobs:
 
       - name: Upload testssl.sh reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: testssl-reports
           path: "*-tls.json"
