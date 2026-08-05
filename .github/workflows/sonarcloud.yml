@@ -16,6 +16,13 @@ on:
     branches: [dev, naratech]
   push:
     branches: [dev]
+  # Every other on-demand workflow in this repo (dast-baseline.yml,
+  # zap-dashboard-auth.yml) has this; sonarcloud.yml originally didn't,
+  # which meant there was no way to re-run it against dev's current head
+  # after SONAR_TOKEN was added mid-way through a run that had already
+  # skipped -- the only path back to a real scan was waiting for the next
+  # organic push.
+  workflow_dispatch: {}
 
 jobs:
   sonarcloud:
@@ -122,7 +129,9 @@ jobs:
 
       - name: SonarCloud scan
         if: steps.guard.outputs.configured == 'true'
-        uses: SonarSource/sonarqube-scan-action@v5
+        # v5 is flagged by GitHub as containing a known security
+        # vulnerability -- caught from the first real run's own annotations.
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
