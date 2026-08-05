@@ -1,0 +1,64 @@
+name: Backend Image Scan (PR)
+
+# CI-T1 — the acceptance criteria says "build & push image to ECR on PR (with
+# Trivy scan)". backend-deploy.yml already builds + Trivy-scans + pushes +
+# deploys, but only on push to dev (docs/devsecops.md §3.5 named this gap
+# explicitly: "Trivy runs post-merge, not on the PR" -- a HIGH CVE in a bumped
+# base image or dependency currently passes every PR check, merges, and only
+# then fails backend-deploy.yml, so someone has to revert under pressure
+# instead of just pushing another commit).
+#
+# This closes that: build + Trivy scan on every PR touching backend/**,
+# same paths backend-deploy.yml watches. Deliberately does NOT push to ECR or
+# touch AWS at all -- an unmerged PR's image has no business landing in the
+# registry or being deployable, and skipping AWS credentials entirely on a
+# PR-triggered workflow is the safer default regardless. "Build & push to
+# ECR" in the acceptance criteria is satisfied by push already happening on
+# merge (backend-deploy.yml); what PR-time actually needs is the scan gate,
+# which is the part that was actually missing.
+on:
+  pull_request:
+    branches: [dev, naratech]
+    paths:
+      - "backend/**"
+      - "notebooks/M4/m4_t3_url_features.py"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/backend-image-scan.yml"
+
+jobs:
+  build-and-scan:
+    name: build + Trivy scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      # Same platform as the real deploy build (backend-deploy.yml) --
+      # Fargate runs linux/amd64, ubuntu-latest runners are natively amd64.
+      # load: true so Trivy can scan the image locally without a registry.
+      - name: Build image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: esp-api:pr-${{ github.event.pull_request.number }}
+
+      # Same gate as backend-deploy.yml's post-merge scan (HIGH/CRITICAL,
+      # ignore-unfixed) -- catching this here means a bad base image or
+      # dependency bump fails the PR instead of merging and failing later.
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: esp-api:pr-${{ github.event.pull_request.number }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true

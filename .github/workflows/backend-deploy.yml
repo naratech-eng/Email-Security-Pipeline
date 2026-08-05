@@ -3,6 +3,8 @@ name: Backend Deploy — dev
 # CI-T1: automates what was, until now, a manual build → push → deploy done
 # by hand. Triggered on push to dev so a merged backend/ change reaches the
 # live esp-api ECS service without anyone re-running that sequence locally.
+# The PR-time half of CI-T1 (build + Trivy scan, so a HIGH CVE fails the PR
+# instead of failing here after merge) lives in backend-image-scan.yml.
 on:
   push:
     branches: [dev]
