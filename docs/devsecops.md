@@ -31,15 +31,18 @@ flowchart LR
 
 ## 3. Required Checks (PR-blocking)
 
-| Stage | Tool | Blocks merge if... |
-|---|---|---|
-| Lint | `ruff`, `black --check`, `eslint`, `prettier --check` | Style or basic issues |
-| Tests | `pytest`, `vitest` | Any test fails |
-| IaC scan | **tfsec**, **Checkov** | High-severity Terraform finding |
-| Container scan | **Trivy** image scan + ECR scan | High CVE in image |
-| Dep scan | **pip-audit**, **npm audit**, **Dependabot** | High CVE in deps |
-| Secrets | **GitHub secret scanning** | Any leaked secret |
-| Terraform plan | `terraform plan` | Plan errors |
+| Stage | Tool | Blocks merge if... | Status |
+|---|---|---|---|
+| Lint | `eslint` (+ `eslint-plugin-security`), `actionlint` | Style or basic issues | implemented, blocking |
+| Lint (Python) | `ruff`, `black --check` | Style or basic issues | **not implemented** — Bandit/Semgrep cover the security half; formatting is unenforced |
+| Tests | `pytest`, `vitest` | Any test fails | implemented (`backend-tests.yml`, `sonarcloud.yml`) |
+| SAST | **Bandit**, **Semgrep**, **CodeQL** | HIGH finding (CodeQL reports only — see §3.2) | implemented |
+| IaC scan | **tfsec**, **Checkov** | High-severity Terraform finding | implemented, blocking |
+| Container scan | **Trivy** image scan + ECR scan | High CVE in image | implemented — but **post-merge only** (`backend-deploy.yml` on push to `dev`), not on the PR. See §3.5 |
+| Dep scan | **pip-audit**, **npm audit**, **Dependabot** | High CVE in deps | implemented — Dependabot config added with SEC-SONAR (`.github/dependabot.yml`); it had been listed here but never actually configured |
+| Secrets | **GitHub secret scanning** + **gitleaks** (full history) | Any leaked secret | implemented, blocking |
+| Quality/coverage | **SonarCloud** | Quality gate fails on new code | implemented — pending one-time `SONAR_TOKEN` setup |
+| Terraform plan | `terraform plan` | Plan errors | implemented, blocking |
 
 ### 3.1 IaC Scan Baseline
 
@@ -68,7 +71,7 @@ Static Application Security Testing analyses our **own source code** (the IaC sc
 | Secrets (full git history) | **gitleaks** | leaked keys/tokens beyond GitHub's native push-protection | **implemented** — `sast.yml`, blocking, `fetch-depth: 0` |
 | Dependency CVEs | **pip-audit**, **npm audit** | known-vulnerable packages | **implemented** — `sast.yml`, blocking on HIGH |
 | Workflow correctness | **actionlint** | invalid expression contexts that fail at run time with no usable log | **implemented** — `sast.yml`, blocking |
-| Quality + security gate | **SonarCloud** (hosted SonarQube — free for public repos) | bugs, code smells, security hotspots, coverage + quality gate on PRs | **not implemented** — the one remaining item from this section's original intent |
+| Quality + security gate | **SonarCloud** (hosted SonarQube — free for public repos) | bugs, code smells, security hotspots, coverage + quality gate on PRs | **implemented** — `sonarcloud.yml` + `sonar-project.properties`. Needs a one-time `SONAR_TOKEN` setup (below); skips cleanly until then |
 
 **Gate:** any **HIGH/CRITICAL** finding from Bandit, Semgrep, gitleaks, eslint, pip-audit, or npm audit blocks the PR merge. Findings are triaged; accepted risks get an inline suppression with a one-line justification (same convention as the IaC baseline in §3.1).
 
@@ -98,17 +101,28 @@ Dynamic Application Security Testing exercises the **running** service, so it ru
 
 **Known trade-off, accepted deliberately (§4.1 — shared backend):** Schemathesis fuzzes `/analyze/email` with generated bodies against the one real `detections` table shared by dev and the naratech-promoted frontend. `submitted_by` is a client-supplied field, not derived from the auth token, so fuzzer-generated rows aren't reliably queryable by identity. Bounded via `--max-examples` and scheduled at low-traffic hours; review/clear obviously-fuzzed rows before a demo.
 
-**Remaining gap from §3.2:** SonarCloud. Semgrep, CodeQL, gitleaks, and eslint-plugin-security all landed with SEC-SAST; SonarCloud is the one item from that section's original intent still outstanding.
+**§3.2 is now fully implemented** — Semgrep, CodeQL, gitleaks, and eslint-plugin-security landed with SEC-SAST; SonarCloud with SEC-SONAR.
+
+**SonarCloud — what it adds and what it needs.** It overlaps the other scanners on vulnerability detection, so it isn't there for that. Its distinct contribution is the **coverage gate on new code**, which nothing else in this pipeline measures, plus maintainability/duplication signal. Two things worth knowing:
+
+- **One-time setup is required and cannot be automated:** import the repo at sonarcloud.io, **disable Automatic Analysis** (it conflicts with CI-based analysis — with both enabled SonarCloud rejects the CI upload), generate a token, and add it as the `SONAR_TOKEN` Actions secret. Until that secret exists `sonarcloud.yml` skips cleanly rather than failing, the same pattern `dast-nightly.yml` uses for `DAST_API_TOKEN`. Full steps are in `sonar-project.properties`.
+- **Current coverage is low and the gate is deliberately scoped to new code.** Backend is ~41% from unit tests alone; the frontend is **2.6% overall**, because only `overviewStats.ts` has tests — the UI layer has none. An *overall* coverage gate would fail on day one and get switched off. SonarCloud's default "Sonar way" gate measures coverage on **new/changed** code instead, which ratchets quality upward without blocking on pre-existing debt. That is the correct gate here; the low overall number is real and is recorded as an open gap rather than hidden.
+
+`sonarcloud.yml` runs its own test pass rather than reusing `backend-tests.yml`'s: Sonar needs coverage reports in the same workspace as the scanner, and cross-workflow artifact plumbing is meaningfully more fragile than one extra test run. Test steps use `continue-on-error` — a failing test is `backend-tests.yml`'s job to gate, and shouldn't cost us the analysis of every other file.
 
 ### 3.4 Where each control runs
 
 ```
+weekly ───────► Dependabot opens upgrade PRs (pip, npm, actions, docker)  [dependabot.yml]
 PR opened ──► SAST      (Bandit, Semgrep, eslint+security, actionlint)   [BLOCKS MERGE, sast.yml]
           ├─► Deps      (pip-audit, npm audit)                            [BLOCKS MERGE, sast.yml]
           ├─► Secrets   (gitleaks, full git history)                      [BLOCKS MERGE, sast.yml]
           ├─► CodeQL    (python, javascript-typescript)                   [reports to Security tab, not blocking yet]
+          ├─► Sonar     (quality gate + coverage on NEW code)             [sonarcloud.yml, needs SONAR_TOKEN]
+          ├─► Tests     (pytest + vitest)                                 [BLOCKS MERGE, backend-tests.yml]
           └─► IaC       (Checkov, tfsec)                                  [BLOCKS MERGE, terraform-pr.yml]
 merge to dev ──► terraform apply + ECS deploy ──► DAST passive (ZAP baseline, dast-baseline.yml)
+             └─► Trivy image scan  [post-merge only — see §3.5]
 nightly ──────► DAST full (ZAP active, Schemathesis fuzz, testssl.sh,
                            swaks relay/spoof tests)                       [dast-nightly.yml]
 on demand ────► authenticated dashboard scan (ZAP + Cognito token)        [zap-dashboard-auth.yml]
@@ -116,6 +130,28 @@ daily 07:00 ──► detection retention purge (180d)                          
 PR targeting naratech ──► naratech-promotion-gate.yml reads the latest
                           nightly conclusion; fails the PR if it wasn't green
 ```
+
+### 3.5 Shift-left assessment — where the gaps actually are
+
+An honest read of how far left each control sits, because "we run scanners in CI" is not the same as shifting left. The axis that matters is **how early a developer learns they broke something**, and how expensive the fix is at that point.
+
+| Stage | What runs there now | Verdict |
+|---|---|---|
+| **Editor / pre-commit** | *nothing* | **The real gap.** See below. |
+| **PR** | SAST (Bandit, Semgrep, CodeQL), secrets (gitleaks), deps (pip-audit, npm audit), IaC (Checkov, tfsec), lint, tests, Sonar | Strong. This is genuinely good coverage. |
+| **Post-merge (dev)** | Trivy image scan, ZAP passive baseline | Trivy is **one stage too late** — see below. |
+| **Nightly** | ZAP active, Schemathesis, testssl.sh, swaks mail tests | Appropriate — needs a live target. |
+| **Runtime** | WAF (COUNT mode), CloudTrail, Config, CloudWatch alarms | Appropriate, with the WAF caveat in §6. |
+
+**Gap 1 — no pre-commit hooks. This is the highest-value remaining improvement.** Every control above fires *after* code is already pushed to a public GitHub repo. For most findings that's fine — a lint error caught at PR costs a minute. For **secrets it is not fine**: gitleaks scanning history tells you a credential leaked, it doesn't prevent the leak. Once a secret is pushed to a public repo it must be treated as compromised and rotated, regardless of whether the commit is later removed — scrapers index public commits within seconds. A `.pre-commit-config.yaml` running gitleaks locally is the only control that prevents that rather than reporting it. GitHub push protection helps but only covers provider-recognised token formats, not (for example) a hardcoded DB password.
+
+**Gap 2 — Trivy runs post-merge, not on the PR.** A PR that bumps the base image or adds a dependency with a HIGH CVE passes every check, merges, and only then fails `backend-deploy.yml` — after it's in `dev`, where someone has to revert under pressure rather than just push another commit. Moving the image build + Trivy scan into the PR checks would catch it while it's still cheap. The build already runs in CI; this is mostly a matter of where.
+
+**Gap 3 — dependencies are unpinned (`>=`, not `==`).** `backend/requirements.txt` uses `>=` throughout, so two builds of the same commit can install different versions. That undercuts reproducibility and means a compromised or broken upstream release lands with no code change to review — the supply-chain attack path that has been the most common in practice recently. `requirements.txt` with `==` pins plus a hash-checked lockfile (`pip-compile`/`uv`) is the fix; Dependabot then handles keeping the pins current, which is exactly the workflow `.github/dependabot.yml` now enables.
+
+**Gap 4 — no SBOM.** Nothing produces a software bill of materials, so "are we affected by CVE-X?" is answered by re-scanning rather than by querying a known inventory. Trivy can emit CycloneDX/SPDX at build time for near-zero extra effort.
+
+**Not gaps, deliberately:** no signed commits, no artifact signing/provenance (SLSA), no runtime IDS/eBPF monitoring, no chaos/fault injection. All are real production practices and all are disproportionate for a capstone on a lab account — noted here so their absence reads as a decision rather than an oversight.
 
 ## 4. Branching & Environments
 
@@ -191,9 +227,11 @@ nothing enforces it automatically.
 ## 7. Code Hygiene
 
 - Conventional commits
-- PR template: change summary, threat-model impact, rollback plan
-- Required code review (≥ 1 approver) on `main`
+- PR template: change summary, threat-model impact, rollback plan, verification — `.github/pull_request_template.md`. Added with SEC-SONAR; it had been described here since M9 but no template file existed, so nobody was ever actually prompted for any of it.
+- Weekly Dependabot upgrade PRs for pip, npm, GitHub Actions, and Docker — `.github/dependabot.yml`
+- Required code review (≥ 1 approver) on `naratech`
 - Branch protection: required checks, no force push, dismiss stale approvals
+- **Not enforced:** Python formatting (`ruff`/`black`). Bandit and Semgrep cover the security half of Python static analysis, but nothing enforces style or catches the class of bug a formatter/linter surfaces. Listed in §3's table as a gap rather than quietly dropped.
 
 ## 8. Backups & Disaster Recovery
 

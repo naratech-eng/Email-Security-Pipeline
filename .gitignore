@@ -190,3 +190,8 @@ UX-REVIEW.md
 BUILD-BRIEF-*.md
 UX-REVIEW-*.md
 IMPLEMENTATION-PLAN.md
+
+# Python coverage artifacts (SEC-SONAR — generated in CI, never committed)
+.coverage
+coverage.xml
+htmlcov/
