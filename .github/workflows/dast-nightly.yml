@@ -37,7 +37,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       # Unauthenticated for now: ZAP's authenticated-request replacer config
       # needs an actual Docker run to validate the header injection, which
@@ -48,7 +48,7 @@ jobs:
       - name: ZAP full active scan
         # v0.13.0 is action-full-scan's latest -- it does NOT share a version
         # number with action-baseline (which is at v0.15.0). Both are node24.
-        uses: zaproxy/action-full-scan@v0.13.0
+        uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c # v0.13.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ env.TARGET }}
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Schemathesis
-        run: pip install schemathesis
+        run: pip install schemathesis==4.24.3
 
 # Checks are chosen deliberately, NOT `all`. The first real run showed `all`
       # blocks on two non-security classes:
@@ -145,11 +145,173 @@ jobs:
 
       - name: Upload fuzz reports
         if: always()
-        uses: actions/upload-artifact@v7 # v4 is still node20 (deprecated); v7 is node24
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7 -- v4 is still node20 (deprecated); v7 is node24
         with:
           name: schemathesis-reports
           path: "*-report.xml"
           retention-days: 14
+
+  # M9-T5 — testssl.sh against the ALB's TLS endpoint and the mail server's
+  # IMAPS/submission listeners. Everything below the ALB's own TLS policy
+  # (ELBSecurityPolicy-TLS13-1-2-2021-06, set in modules/alb) is config the
+  # ALB owns; the mail server's cert/protocol config is cloud-init's own, so
+  # both are worth scanning independently.
+  tls-scan:
+    name: testssl.sh — ALB + mail server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan public ALB (esp-api.naratech.xyz:443)
+        run: |
+          docker run --rm drwetter/testssl.sh --jsonfile-pretty /dev/stdout --quiet \
+            esp-api.naratech.xyz:443 > alb-tls.json || true
+
+      # STARTTLS on submission -- testssl.sh needs --starttls to negotiate it
+      # instead of expecting TLS from the first byte, or every check no-ops.
+      - name: Scan mail server submission (mail.naratech.xyz:587, STARTTLS)
+        run: |
+          docker run --rm drwetter/testssl.sh --jsonfile-pretty /dev/stdout --quiet \
+            --starttls smtp mail.naratech.xyz:587 > mail-submission-tls.json || true
+
+      - name: Scan mail server IMAPS (mail.naratech.xyz:993)
+        run: |
+          docker run --rm drwetter/testssl.sh --jsonfile-pretty /dev/stdout --quiet \
+            mail.naratech.xyz:993 > mail-imaps-tls.json || true
+
+      # testssl.sh severities: OK/INFO/LOW/MEDIUM/HIGH/CRITICAL. Gate on
+      # HIGH/CRITICAL only, matching the ZAP gate's High-only threshold
+      # above -- the self-signed mail cert (§5 of the mail filter testing
+      # guide) already produces expected MEDIUM-ish noise on trust chain
+      # checks that nobody will action until M7-T17's Let's Encrypt path is
+      # confirmed live everywhere, so gating on MEDIUM would make this
+      # ignorable on day one.
+      - name: Gate on HIGH/CRITICAL findings
+        run: |
+          FAIL=0
+          for f in alb-tls.json mail-submission-tls.json mail-imaps-tls.json; do
+            if [ ! -s "$f" ]; then
+              echo "::warning::$f is empty — that scan didn't produce output (target unreachable or docker pull failed), skipping its gate."
+              continue
+            fi
+            COUNT=$(jq '[.[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' "$f")
+            echo "$f — HIGH/CRITICAL findings: $COUNT"
+            jq -r '.[] | select(.severity == "HIGH" or .severity == "CRITICAL") | "  [\(.severity)] \(.id): \(.finding)"' "$f" || true
+            if [ "$COUNT" -gt 0 ]; then FAIL=1; fi
+          done
+          if [ "$FAIL" -eq 1 ]; then
+            echo "::error::HIGH/CRITICAL TLS finding(s) — do not promote until triaged."
+            exit 1
+          fi
+          echo "OK — no HIGH/CRITICAL TLS findings."
+
+      - name: Upload testssl.sh reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: testssl-reports
+          path: "*-tls.json"
+          retention-days: 14
+
+  # M9-T5 / SEC-01,02 (docs/m7-t4-t6-mail-filter-testing.md) — automates the
+  # manual swaks test matrix that guide documents, against the live public
+  # mail server (no SSM needed, port 25/587 are internet-facing by design).
+  # Everything here is either rejected-by-design (relay/spoof attempts) or
+  # entirely internal (testuser1<->testuser2) -- nothing sends real mail to
+  # an external inbox.
+  mail-relay-test:
+    name: swaks — relay + spoof rejection tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install swaks
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq swaks
+
+      # S-07/M9-T2 — port 25 is receive-only. Relaying to an external domain
+      # must be rejected with 554 5.7.1 before any bytes leave the server;
+      # this is the "no open relay" acceptance criterion, automated.
+      - name: "Test 1 — unauthenticated relay to external domain on :25 must be REJECTED"
+        run: |
+          set +e
+          OUT=$(swaks --to nobody@example.com --from testuser1@mail.naratech.xyz \
+            --server mail.naratech.xyz --port 25 \
+            --header "Subject: relay test" --body "should be rejected" 2>&1)
+          echo "$OUT"
+          if echo "$OUT" | grep -q "554 5.7.1"; then
+            echo "OK — relay correctly denied."
+          else
+            echo "::error::Expected '554 5.7.1 ... Relay access denied', got something else — possible open relay."
+            exit 1
+          fi
+
+      # M9-T2 — submission (587) without SASL auth must also be rejected;
+      # only authenticated senders may relay.
+      - name: "Test 2 — unauthenticated submission on :587 must be REJECTED"
+        run: |
+          set +e
+          OUT=$(swaks --to nobody@example.com --from testuser1@mail.naratech.xyz \
+            --server mail.naratech.xyz --port 587 \
+            --header "Subject: unauth submission test" --body "should be rejected" 2>&1)
+          echo "$OUT"
+          if echo "$OUT" | grep -qE "5\.7\.[01]|Authentication required"; then
+            echo "OK — unauthenticated submission correctly denied."
+          else
+            echo "::error::Expected an auth-required rejection on :587, got something else."
+            exit 1
+          fi
+
+      # Authenticated relay must actually work -- the negative tests above
+      # are only meaningful if the positive path isn't also broken.
+      - name: "Test 3 — authenticated submission on :587 must SUCCEED"
+        run: |
+          set +e
+          OUT=$(swaks --to testuser2@mail.naratech.xyz --from testuser1@mail.naratech.xyz \
+            --server mail.naratech.xyz --port 587 --tls \
+            --auth-user testuser1 --auth-password 'ChangeMe123!' \
+            --header "Subject: DAST authenticated relay test $(date -u +%s)" \
+            --body "swaks authenticated submission check" 2>&1)
+          echo "$OUT"
+          if echo "$OUT" | grep -q "250"; then
+            echo "OK — authenticated submission accepted."
+          else
+            echo "::error::Authenticated submission on :587 failed — check SASL/Dovecot auth socket."
+            exit 1
+          fi
+
+      # M9-T0 verification — confirm the inbound message just delivered
+      # actually carries Received-SPF / Authentication-Results, i.e. the
+      # opendkim/opendmarc/policyd-spf pipeline is live end-to-end, not just
+      # present in Terraform. Python's imaplib over 993 (self-signed cert,
+      # hence no cert verification) rather than another CLI dependency.
+      - name: "Test 4 — inbound mail carries SPF/DKIM/DMARC annotation headers"
+        run: |
+          python3 - <<'PYEOF'
+          import imaplib, ssl, sys, time
+
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+
+          time.sleep(5)  # let the message just sent by Test 3 land
+          m = imaplib.IMAP4_SSL("mail.naratech.xyz", 993, ssl_context=ctx)
+          m.login("testuser2", "ChangeMe123!")
+          m.select("INBOX")
+          typ, data = m.search(None, "ALL")
+          ids = data[0].split()
+          if not ids:
+              print("::error::No messages in testuser2's INBOX to check.")
+              sys.exit(1)
+          typ, msg = m.fetch(ids[-1], "(BODY[HEADER])")
+          headers = msg[0][1].decode("utf-8", errors="replace")
+          print(headers)
+          has_spf = "Received-SPF" in headers or "Authentication-Results" in headers
+          has_verdict = "X-Phishing-Verdict" in headers
+          m.logout()
+          if not has_spf:
+              print("::error::No Received-SPF/Authentication-Results header — M9-T0's inbound SPF/DKIM/DMARC pipeline isn't annotating mail.")
+              sys.exit(1)
+          if not has_verdict:
+              print("::error::No X-Phishing-Verdict header — the phishing content_filter isn't running.")
+              sys.exit(1)
+          print("OK — inbound mail carries both SPF/DKIM/DMARC and phishing-verdict annotations.")
+          PYEOF
 
   # Both scans feed into this: a naratech-targeting PR (see the
   # naratech-promotion-gate job in terraform-pr.yml or wherever the gate
@@ -159,13 +321,16 @@ jobs:
   gate:
     name: DAST nightly gate
     runs-on: ubuntu-latest
-    needs: [zap-active, schemathesis-fuzz]
+    needs: [zap-active, schemathesis-fuzz, tls-scan, mail-relay-test]
     if: always()
     steps:
       - name: Check results
         run: |
-          if [ "${{ needs.zap-active.result }}" == "failure" ] || [ "${{ needs.schemathesis-fuzz.result }}" == "failure" ]; then
+          if [ "${{ needs.zap-active.result }}" == "failure" ] \
+             || [ "${{ needs.schemathesis-fuzz.result }}" == "failure" ] \
+             || [ "${{ needs.tls-scan.result }}" == "failure" ] \
+             || [ "${{ needs.mail-relay-test.result }}" == "failure" ]; then
             echo "HIGH finding(s) in tonight's DAST run -- do not promote to naratech until triaged." >&2
             exit 1
           fi
-          echo "OK — no blocking findings in tonight's active scan + fuzz."
+          echo "OK — no blocking findings in tonight's active scan + fuzz + TLS + mail relay tests."

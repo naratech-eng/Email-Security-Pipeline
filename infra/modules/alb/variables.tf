@@ -26,3 +26,8 @@ variable "esp_api_zone_id" {
   type        = string
   description = "Route53 hosted zone ID for esp-api.naratech.xyz (Z04132153JT7YAXT7E8D)"
 }
+
+variable "alerts_topic_arn" {
+  type        = string
+  description = "SNS topic ARN for the OBS-T1 5xx/latency alarms."
+}

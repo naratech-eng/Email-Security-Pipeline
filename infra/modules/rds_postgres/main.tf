@@ -51,3 +51,47 @@ resource "aws_db_instance" "this" {
 
   tags = { Project = var.project }
 }
+
+# OBS-T1 — the two RDS metrics that predict an outage before it happens:
+# sustained CPU pressure and connection exhaustion (db.t4g.micro caps out
+# around 87 connections, so 80 gives real headroom before the pool actually
+# fills and the API starts throwing connection errors).
+resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
+  alarm_name          = "${var.project}-rds-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "RDS CPU above 80% for 15 minutes."
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.this.id
+  }
+
+  alarm_actions = [var.alerts_topic_arn]
+  ok_actions    = [var.alerts_topic_arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "rds_connections" {
+  alarm_name          = "${var.project}-rds-connections"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "DatabaseConnections"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "RDS connection count above 80 for 10 minutes (db.t4g.micro caps out around 87)."
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.this.id
+  }
+
+  alarm_actions = [var.alerts_topic_arn]
+  ok_actions    = [var.alerts_topic_arn]
+}

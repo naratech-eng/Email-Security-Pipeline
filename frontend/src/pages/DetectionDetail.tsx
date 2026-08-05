@@ -65,36 +65,55 @@ export default function DetectionDetail() {
       : '/detections';
   const cameFromFilteredList = backTo !== '/detections';
 
-  const [state, setState] = useState<State>({ phase: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
 
+  // Which request the phase below describes. Keying the settled outcome lets
+  // both "loading" and "missing" be *derived* rather than written into state
+  // from the effect body: navigating to a new id, or hitting retry, changes the
+  // key, which is by itself enough to read as loading again. Writing them
+  // instead meant every id change rendered once with the previous detection's
+  // data still on screen before the effect could reset it.
+  const requestKey = `${detectionId}:${reloadKey}`;
+  const [outcome, setOutcome] = useState<{ key: string; state: State } | null>(null);
+
+  const state: State = !valid
+    ? { phase: 'missing' }
+    : outcome?.key === requestKey
+      ? outcome.state
+      : { phase: 'loading' };
+
   useEffect(() => {
-    if (!valid) {
-      setState({ phase: 'missing' });
-      return;
-    }
+    if (!valid) return;
     const controller = new AbortController();
-    setState({ phase: 'loading' });
 
     getDetection(detectionId, controller.signal)
       .then((record) =>
-        setState(record ? { phase: 'ready', record } : { phase: 'missing' }),
+        setOutcome({
+          key: requestKey,
+          state: record ? { phase: 'ready', record } : { phase: 'missing' },
+        }),
       )
       .catch((err: unknown) => {
         if (isAbortError(err)) return;
-        setState({
-          phase: 'error',
-          message:
-            err instanceof ApiError ? err.message : 'Could not load this detection.',
+        setOutcome({
+          key: requestKey,
+          state: {
+            phase: 'error',
+            message:
+              err instanceof ApiError ? err.message : 'Could not load this detection.',
+          },
         });
       });
 
     return () => controller.abort();
-  }, [detectionId, valid, reloadKey]);
+  }, [detectionId, valid, requestKey]);
 
-  const onReviewed = useCallback((record: DetectionRecord) => {
-    setState({ phase: 'ready', record });
-  }, []);
+  const onReviewed = useCallback(
+    (record: DetectionRecord) => {
+      setOutcome({ key: requestKey, state: { phase: 'ready', record } });
+    },
+    [requestKey],
+  );
 
   return (
     <div className="space-y-5">

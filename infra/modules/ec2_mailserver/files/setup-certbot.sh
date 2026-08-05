@@ -53,15 +53,24 @@ fi
   --domains "$MAIL_HOSTNAME" --email "$CERTBOT_EMAIL" \
   --cert-name esp-mail --key-type rsa && \
 LIVE=/etc/letsencrypt/live/esp-mail && \
+ARCHIVE=/etc/letsencrypt/archive/esp-mail && \
 postconf -e "smtpd_tls_cert_file = $LIVE/fullchain.pem" && \
 postconf -e "smtpd_tls_key_file = $LIVE/privkey.pem" && \
 printf 'ssl = required\nssl_cert = <%s/fullchain.pem\nssl_key = <%s/privkey.pem\nssl_min_protocol = TLSv1.2\n' "$LIVE" "$LIVE" > /etc/dovecot/conf.d/94-esp-ssl.conf && \
 chmod 0755 /etc/letsencrypt/live /etc/letsencrypt/archive && \
+chgrp postfix "$ARCHIVE"/privkey*.pem && chmod 0640 "$ARCHIVE"/privkey*.pem && \
 echo "certbot: issued via $CERTBOT_BIN, postfix+dovecot now using the trusted cert" || \
 echo "certbot: issuance FAILED, staying on the self-signed cert"
 
 # Renewal rewrites the cert files but nothing re-reads them without this hook.
+# Critically, this must also redo the chgrp/chmod below: certbot's renewal
+# writes a brand-new privkeyN.pem each time and re-points the live/ symlink,
+# so the group grant applied above is lost on the very first renewal unless
+# it's reapplied here too. Without this, Postfix's unprivileged smtpd process
+# (submission on 587, TLS mandatory) loses read access to the key on the next
+# renewal and outbound STARTTLS silently breaks again for real mail clients
+# (Dovecot survives because its SSL key loading happens in its root master).
 mkdir -p /etc/letsencrypt/renewal-hooks/deploy
-printf '#!/bin/sh\nsystemctl reload postfix dovecot\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-mail.sh
+printf '#!/bin/sh\nchgrp postfix /etc/letsencrypt/archive/esp-mail/privkey*.pem\nchmod 0640 /etc/letsencrypt/archive/esp-mail/privkey*.pem\nsystemctl reload postfix dovecot\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-mail.sh
 chmod 0755 /etc/letsencrypt/renewal-hooks/deploy/reload-mail.sh
 systemctl enable --now certbot-renew.timer || true

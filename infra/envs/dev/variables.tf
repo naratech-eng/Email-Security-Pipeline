@@ -128,3 +128,52 @@ variable "dashboard_api_base_url" {
   default     = "https://esp-api.naratech.xyz"
   description = "FastAPI base URL the dashboard SPA calls (VITE_API_BASE_URL)."
 }
+
+# --------------------------------------------------------------------------- #
+# M9-T4 — security baseline / alerting
+# --------------------------------------------------------------------------- #
+variable "alert_email" {
+  type        = string
+  default     = ""
+  description = "Optional email subscribed to the OBS-T1/M9-T4 SNS alerts topic. SNS sends a confirmation link on first apply; must be clicked manually."
+}
+
+variable "waf_block_mode" {
+  type        = bool
+  default     = false
+  description = "false = WAF managed rules run in COUNT mode (observe only); true = actually block. Flip once a baseline run shows no false positives against real traffic."
+}
+
+variable "enable_guardduty" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Confirmed OFF permanently, not a temporary flag: `aws guardduty
+    create-detector --enable --profile lab-user` 403s with
+    SubscriptionRequiredException directly against this account (verified
+    outside Terraform/CI, with AdministratorAccess credentials -- ruling out
+    both an IAM gap and a CI-role-specific issue). This is an account-level
+    subscription block on the $200-school-credit lab account, the kind
+    education/credit AWS accounts commonly apply to usage-priced services
+    like GuardDuty to prevent surprise bills. No retry or code change fixes
+    this; it needs a different AWS account tier. Documented as a deliberate,
+    accepted gap in docs/devsecops.md §6, not a TODO.
+  EOT
+}
+
+variable "enable_security_hub" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Confirmed OFF permanently, not a temporary flag: `aws securityhub
+    enable-security-hub --profile lab-user` 403s with
+    SubscriptionRequiredException directly against this account (verified
+    outside Terraform/CI, with AdministratorAccess credentials -- ruling out
+    both an IAM gap and a CI-role-specific issue). This is an account-level
+    subscription block on the $200-school-credit lab account, the kind
+    education/credit AWS accounts commonly apply to usage-priced services
+    like Security Hub to prevent surprise bills. No retry or code change
+    fixes this; it needs a different AWS account tier. Documented as a
+    deliberate, accepted gap in docs/devsecops.md §6, not a TODO.
+  EOT
+}

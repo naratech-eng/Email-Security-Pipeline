@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DURATION, prefersReducedMotion, transitions } from '@/lib/motion';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { DURATION, transitions } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 
@@ -32,14 +33,11 @@ interface StatTileProps {
 
 /** Counts up to `value` on mount; snaps instantly under reduced motion. */
 function useCountUp(value: number | null): number | null {
+  const still = useReducedMotion();
   const [shown, setShown] = useState(value);
 
   useEffect(() => {
-    if (value === null) return;
-    if (prefersReducedMotion()) {
-      setShown(value);
-      return;
-    }
+    if (value === null || still) return;
     const from = 0;
     const start = performance.now();
     const ms = DURATION.countUp * 1000;
@@ -53,9 +51,12 @@ function useCountUp(value: number | null): number | null {
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [value]);
+  }, [value, still]);
 
-  return value === null ? null : shown;
+  // Under reduced motion the final value is returned directly rather than
+  // written into state from the effect: the animation simply never runs, so
+  // there is no intermediate number for `shown` to hold.
+  return value === null ? null : still ? value : shown;
 }
 
 export function StatTile({

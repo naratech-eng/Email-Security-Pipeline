@@ -1,0 +1,89 @@
+# docs/devsecops.md §3 lists Dependabot as part of the dependency-scan gate,
+# but no config existed until now -- so it was never actually running. This
+# closes that gap.
+#
+# Dependabot complements pip-audit/npm audit rather than repeating them: those
+# tell you a vulnerable version is installed, Dependabot opens the PR that
+# upgrades it. Without this, a CVE surfaced by pip-audit blocks every PR until
+# someone manually bumps the pin.
+#
+# ⚠️ ONE-TIME SETUP NEEDED, or every Dependabot PR shows red checks:
+# Dependabot-authored PRs run with a restricted context and CANNOT read normal
+# repository Actions secrets -- GitHub keeps a SEPARATE store for them at
+# Settings > Secrets and variables > *Dependabot* tab. This is a separate
+# SCOPE, not a per-branch thing: add each secret once there and it applies to
+# every Dependabot PR on every branch. Until then `backend-tests.yml` and
+# `terraform-pr.yml` fail on every Dependabot PR at their "Configure AWS
+# credentials (OIDC)" step, because `secrets.AWS_OIDC_ROLE_ARN` resolves to an
+# empty string. Copy exactly these three:
+#
+#     AWS_OIDC_ROLE_ARN, TF_VAR_DB_PASSWORD, TF_VAR_KEY_NAME
+#
+# NOT TF_VAR_AMPLIFY_GITHUB_ACCESS_TOKEN. The workflows reference it, but it
+# is intentionally optional and no such secret exists: the Amplify module
+# resolves an unset token to `null` and sets ignore_changes on it, because the
+# PAT is only consumed when the Amplify app is first CREATED (to install the
+# GitHub webhook). The app already exists, so CI plans and applies clean
+# without it -- verified against green terraform-apply runs with only the
+# three secrets above configured. It would only be needed to rebuild the
+# Amplify app from scratch.
+#
+# Copying them (rather than making the workflows skip on Dependabot PRs) is
+# the right call: a dependency bump is precisely the change you most want the
+# full test suite to run against. Skipping tests there would defeat the point.
+#
+# open-pull-requests-limit is kept low deliberately -- each PR triggers ~14 CI
+# jobs, and four ecosystems at the default of 5 could put 20 PRs and ~280 jobs
+# in the queue at once. Actions minutes are free on this public repo, so this
+# is about review load and queue contention, not cost.
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: [dependencies, security]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: [dependencies, security]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # One PR for the whole dev-tooling set instead of ~15 separate ones.
+      # eslint/vitest/types churn frequently and are low-risk to move together;
+      # runtime deps stay ungrouped so each gets reviewed on its own.
+      dev-tooling:
+        dependency-type: development
+        patterns: ["*"]
+
+  # Keeps the pinned action versions current -- this repo pins several
+  # (actionlint 1.7.12, gitleaks 8.30.1, trivy-action, zap actions), and a
+  # pinned-and-forgotten scanner silently stops catching new rules.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, security]
+    commit-message:
+      prefix: "chore(deps)"

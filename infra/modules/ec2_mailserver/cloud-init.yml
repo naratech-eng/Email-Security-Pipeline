@@ -121,6 +121,8 @@ runcmd:
       -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
       -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
       -o milter_macro_daemon_name=ORIGINATING
+      -o smtpd_milters=
+      -o non_smtpd_milters=
     MASTERCF
 
   - useradd -m testuser1 || true
@@ -154,6 +156,17 @@ runcmd:
     aws s3 cp s3://${scripts_bucket}/setup-certbot.sh /tmp/setup-certbot.sh --region us-east-1
     && sh /tmp/setup-certbot.sh ${mail_hostname} ${certbot_email}
     || echo "setup-certbot.sh fetch/run failed, staying on the self-signed cert"
+
+  # M9-T0: inbound SPF/DKIM/DMARC validation (opendkim/opendmarc/policyd-spf).
+  # Logic lives in S3 like the two scripts above -- inlining it in this file
+  # pushed cloud-init.yml's base64 size over EC2's 16384-byte user_data cap.
+  # Must run before postfix first starts (further down) so master.cf/main.cf
+  # already carry the milter/policy wiring at boot. Non-fatal: failure leaves
+  # mail flowing without SPF/DKIM/DMARC annotation rather than blocking boot.
+  - >-
+    aws s3 cp s3://${scripts_bucket}/setup-mail-auth.sh /tmp/setup-mail-auth.sh --region us-east-1
+    && sh /tmp/setup-mail-auth.sh ${mail_hostname}
+    || echo "setup-mail-auth.sh fetch/run failed, inbound mail will not carry SPF/DKIM/DMARC results"
 
   - useradd -r -s /sbin/nologin filter || true
 

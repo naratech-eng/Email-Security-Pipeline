@@ -9,6 +9,7 @@ COPY backend/main.py backend/main.py
 COPY backend/inference.py backend/inference.py
 COPY backend/mime_parser.py backend/mime_parser.py
 COPY backend/db.py backend/db.py
+COPY backend/retention_purge.py backend/retention_purge.py
 COPY backend/cognito_auth.py backend/cognito_auth.py
 COPY backend/alembic.ini backend/alembic.ini
 COPY backend/migrations backend/migrations

@@ -1,0 +1,137 @@
+name: SonarCloud
+
+# SEC-SONAR / docs/devsecops.md §3.2 — the last outstanding tool from that
+# section. Complements the rest of the SAST stack rather than duplicating it:
+# Bandit/Semgrep/CodeQL find vulnerabilities, Sonar adds maintainability,
+# duplication, and — the part that matters most here — a COVERAGE gate on new
+# code, which nothing else in the pipeline measures.
+#
+# Runs its own tests rather than consuming backend-tests.yml's, deliberately:
+# Sonar needs the coverage reports in the same workspace as the scanner, and
+# cross-workflow artifact plumbing is markedly more fragile than paying for
+# one extra test run. See sonar-project.properties for the one-time SonarCloud
+# setup this depends on.
+on:
+  pull_request:
+    branches: [dev, naratech]
+  push:
+    branches: [dev]
+  # Every other on-demand workflow in this repo (dast-baseline.yml,
+  # zap-dashboard-auth.yml) has this; sonarcloud.yml originally didn't,
+  # which meant there was no way to re-run it against dev's current head
+  # after SONAR_TOKEN was added mid-way through a run that had already
+  # skipped -- the only path back to a real scan was waiting for the next
+  # organic push.
+  workflow_dispatch: {}
+
+jobs:
+  sonarcloud:
+    name: SonarCloud analysis
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # AWS OIDC — backend integration tests pull M6 models from S3
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: espuser
+          POSTGRES_PASSWORD: esppass
+          POSTGRES_DB: espdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U espuser"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_CREDENTIALS_JSON: '{"username":"espuser","password":"esppass","host":"127.0.0.1","port":5432,"dbname":"espdb"}'
+
+    steps:
+      # The `secrets` context is not valid in a job-level `if:` -- referencing
+      # it there fails the whole file to parse (the bug that broke
+      # dast-nightly.yml). Map to env, gate the steps instead.
+      - name: Check for SONAR_TOKEN
+        id: guard
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SONAR_TOKEN is not set — skipping SonarCloud. See sonar-project.properties for the one-time setup."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Sonar needs full history: it attributes issues to commits to decide
+      # what is "new code", and a shallow clone makes everything look new.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: steps.guard.outputs.configured == 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.guard.outputs.configured == 'true'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: steps.guard.outputs.configured == 'true'
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend deps
+        if: steps.guard.outputs.configured == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest==9.1.1 pytest-cov==7.1.0
+        working-directory: backend
+
+      - name: Run detections table migration
+        if: steps.guard.outputs.configured == 'true'
+        run: alembic upgrade head
+        working-directory: backend
+
+      # continue-on-error: a failing test should be reported by
+      # backend-tests.yml, which exists to gate exactly that. If it also broke
+      # the Sonar run we'd lose the analysis of every OTHER file for one
+      # unrelated failure -- and partial coverage is still worth uploading.
+      - name: Backend tests with coverage
+        if: steps.guard.outputs.configured == 'true'
+        continue-on-error: true
+        run: python -m pytest tests/ --cov=. --cov-report=xml --cov-report=term
+        working-directory: backend
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        if: steps.guard.outputs.configured == 'true'
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        if: steps.guard.outputs.configured == 'true'
+        run: npm ci --ignore-scripts
+        working-directory: frontend
+
+      - name: Frontend tests with coverage
+        if: steps.guard.outputs.configured == 'true'
+        continue-on-error: true
+        run: npm run test:coverage
+        working-directory: frontend
+
+      - name: SonarCloud scan
+        if: steps.guard.outputs.configured == 'true'
+        # v5 is flagged by GitHub as containing a known security
+        # vulnerability -- caught from the first real run's own annotations.
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io

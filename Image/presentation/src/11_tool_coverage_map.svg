@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+
+  <text x="60" y="62" font-size="38" font-weight="bold" fill="#2E1065">One Tool Cannot See Everything</text>
+  <text x="60" y="100" font-size="23" fill="#6B7280">Each scanner reads a different artifact. Coverage comes from stacking them, not from picking the &#8220;best&#8221; one.</text>
+
+  <!-- header -->
+  <rect x="60" y="122" width="1480" height="46" rx="8" fill="#2E1065"/>
+  <text x="80"  y="152" font-size="18" font-weight="bold" fill="#FFFFFF">STAGE</text>
+  <text x="195" y="152" font-size="18" font-weight="bold" fill="#FFFFFF">WHAT IS INSPECTED</text>
+  <text x="510" y="152" font-size="18" font-weight="bold" fill="#FFFFFF">TOOL</text>
+  <text x="915" y="152" font-size="18" font-weight="bold" fill="#FFFFFF">THE ATTACK IT IS THERE TO STOP</text>
+
+  <!-- row 1 -->
+  <rect x="60" y="176" width="1480" height="74" rx="8" fill="#FDF2F8" stroke="#F9A8D4" stroke-width="1.5"/>
+  <rect x="76" y="196" width="96" height="26" rx="13" fill="#BE185D"/>
+  <text x="124" y="215" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">PR</text>
+  <text x="195" y="208" font-size="20" font-weight="bold" fill="#2E1065">Our Python + TypeScript</text>
+  <text x="195" y="233" font-size="17" fill="#6B7280">the code we wrote ourselves</text>
+  <text x="510" y="208" font-size="19" font-weight="bold" fill="#9D174D">Bandit &#183; Semgrep &#183; CodeQL</text>
+  <text x="510" y="233" font-size="19" font-weight="bold" fill="#9D174D">ESLint-security</text>
+  <text x="915" y="208" font-size="18" fill="#3F3F46">Command injection, unsafe deserialization, hardcoded</text>
+  <text x="915" y="233" font-size="18" fill="#3F3F46">credentials, DOM-XSS from attacker-supplied email text</text>
+
+  <!-- row 2 -->
+  <rect x="60" y="256" width="1480" height="74" rx="8" fill="#FDF2F8" stroke="#F9A8D4" stroke-width="1.5"/>
+  <rect x="76" y="276" width="96" height="26" rx="13" fill="#BE185D"/>
+  <text x="124" y="295" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">PR</text>
+  <text x="195" y="288" font-size="20" font-weight="bold" fill="#2E1065">Third-party libraries</text>
+  <text x="195" y="313" font-size="17" fill="#6B7280">~75 packages we did not write</text>
+  <text x="510" y="288" font-size="19" font-weight="bold" fill="#9D174D">pip-audit &#183; npm audit</text>
+  <text x="510" y="313" font-size="19" font-weight="bold" fill="#9D174D">Dependabot</text>
+  <text x="915" y="288" font-size="18" fill="#3F3F46">A published CVE in a dependency &#8212; the supply-chain path</text>
+  <text x="915" y="313" font-size="18" fill="#3F3F46">that needs no flaw in our own code at all</text>
+
+  <!-- row 3 -->
+  <rect x="60" y="336" width="1480" height="74" rx="8" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.5"/>
+  <rect x="76" y="356" width="96" height="26" rx="13" fill="#059669"/>
+  <text x="124" y="375" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="middle">LOCAL+PR</text>
+  <text x="195" y="368" font-size="20" font-weight="bold" fill="#2E1065">Every commit ever made</text>
+  <text x="195" y="393" font-size="17" fill="#6B7280">full git history, not just HEAD</text>
+  <text x="510" y="368" font-size="19" font-weight="bold" fill="#065F46">gitleaks</text>
+  <text x="510" y="393" font-size="19" font-weight="bold" fill="#065F46">+ GitHub push protection</text>
+  <text x="915" y="368" font-size="18" fill="#3F3F46">A leaked AWS key or DB password. On a public repo a</text>
+  <text x="915" y="393" font-size="18" fill="#3F3F46">pushed secret is compromised even if you delete it.</text>
+
+  <!-- row 4 -->
+  <rect x="60" y="416" width="1480" height="74" rx="8" fill="#FDF2F8" stroke="#F9A8D4" stroke-width="1.5"/>
+  <rect x="76" y="436" width="96" height="26" rx="13" fill="#BE185D"/>
+  <text x="124" y="455" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">PR</text>
+  <text x="195" y="448" font-size="20" font-weight="bold" fill="#2E1065">Terraform (our cloud)</text>
+  <text x="195" y="473" font-size="17" fill="#6B7280">infrastructure as code</text>
+  <text x="510" y="448" font-size="19" font-weight="bold" fill="#9D174D">Checkov &#183; tfsec</text>
+  <text x="510" y="473" font-size="17" fill="#6B7280">HIGH severity blocks the PR</text>
+  <text x="915" y="448" font-size="18" fill="#3F3F46">A world-readable S3 bucket, an open security group, an</text>
+  <text x="915" y="473" font-size="18" fill="#3F3F46">unencrypted database &#8212; misconfiguration, not code</text>
+
+  <!-- row 5 -->
+  <rect x="60" y="496" width="1480" height="74" rx="8" fill="#FDF2F8" stroke="#F9A8D4" stroke-width="1.5"/>
+  <rect x="76" y="516" width="96" height="26" rx="13" fill="#BE185D"/>
+  <text x="124" y="535" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">PR</text>
+  <text x="195" y="528" font-size="20" font-weight="bold" fill="#2E1065">The container image</text>
+  <text x="195" y="553" font-size="17" fill="#6B7280">base OS + installed libs</text>
+  <text x="510" y="528" font-size="19" font-weight="bold" fill="#9D174D">Trivy</text>
+  <text x="510" y="553" font-size="17" fill="#6B7280">HIGH/CRITICAL, fixed CVEs only</text>
+  <text x="915" y="528" font-size="18" fill="#3F3F46">A vulnerable base image shipping to ECS Fargate, where</text>
+  <text x="915" y="553" font-size="18" fill="#3F3F46">there is no host agent to catch it after the fact</text>
+
+  <!-- row 6 -->
+  <rect x="60" y="576" width="1480" height="74" rx="8" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+  <rect x="76" y="596" width="96" height="26" rx="13" fill="#B45309"/>
+  <text x="124" y="615" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">NIGHTLY</text>
+  <text x="195" y="608" font-size="20" font-weight="bold" fill="#2E1065">The running API</text>
+  <text x="195" y="633" font-size="17" fill="#6B7280">deployed, live, authenticated</text>
+  <text x="510" y="608" font-size="19" font-weight="bold" fill="#92400E">OWASP ZAP &#183; Schemathesis</text>
+  <text x="510" y="633" font-size="17" fill="#6B7280">active attack + property fuzzing</text>
+  <text x="915" y="608" font-size="18" fill="#3F3F46">Auth bypass, injection, and 5xx crashes that only appear</text>
+  <text x="915" y="633" font-size="18" fill="#3F3F46">when real requests hit real code &#8212; invisible to SAST</text>
+
+  <!-- row 7 -->
+  <rect x="60" y="656" width="1480" height="74" rx="8" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+  <rect x="76" y="676" width="96" height="26" rx="13" fill="#B45309"/>
+  <text x="124" y="695" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">NIGHTLY</text>
+  <text x="195" y="688" font-size="20" font-weight="bold" fill="#2E1065">TLS endpoints</text>
+  <text x="195" y="713" font-size="17" fill="#6B7280">ALB 443, mail 587 + 993</text>
+  <text x="510" y="688" font-size="19" font-weight="bold" fill="#92400E">testssl.sh</text>
+  <text x="510" y="713" font-size="17" fill="#6B7280">HIGH/CRITICAL gates promotion</text>
+  <text x="915" y="688" font-size="18" fill="#3F3F46">Weak ciphers and protocol downgrade &#8212; an attacker</text>
+  <text x="915" y="713" font-size="18" fill="#3F3F46">reading mail in transit rather than breaking the app</text>
+
+  <!-- row 8 -->
+  <rect x="60" y="736" width="1480" height="74" rx="8" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+  <rect x="76" y="756" width="96" height="26" rx="13" fill="#B45309"/>
+  <text x="124" y="775" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">NIGHTLY</text>
+  <text x="195" y="768" font-size="20" font-weight="bold" fill="#2E1065">The mail server</text>
+  <text x="195" y="793" font-size="17" fill="#6B7280">Postfix, ports 25 and 587</text>
+  <text x="510" y="768" font-size="19" font-weight="bold" fill="#92400E">swaks</text>
+  <text x="510" y="793" font-size="17" fill="#6B7280">scripted SMTP conversations</text>
+  <text x="915" y="768" font-size="18" fill="#3F3F46">Becoming an open relay for spam, or accepting spoofed</text>
+  <text x="915" y="793" font-size="18" fill="#3F3F46">senders that SPF/DKIM/DMARC should have rejected</text>
+
+  <text x="60" y="856" font-size="19" fill="#6B7280">Read the rows as a stack: SAST reasons about code it never runs; DAST runs code it cannot read. Neither one alone is coverage.</text>
+</svg>

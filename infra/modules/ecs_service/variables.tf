@@ -86,3 +86,9 @@ variable "desired_count" {
   type    = number
   default = 1
 }
+
+variable "retention_days" {
+  type        = number
+  default     = 180
+  description = "M9-T7 — detections older than this are purged by the scheduled retention task. See docs/data-retention-privacy.md."
+}

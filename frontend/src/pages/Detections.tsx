@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
   ArrowLeft,
@@ -48,14 +48,22 @@ export default function Detections() {
   // still-echoing URL value between keystrokes, which drops characters when you
   // type fast or paste. The URL stays the shareable store; the field stays local.
   const [qDraft, setQDraft] = useState(client.q);
-  const qDraftRef = useRef(qDraft);
-  qDraftRef.current = qDraft;
 
-  // Adopt external changes to `q` (Back/Forward, the clear button, a pasted link)
-  // without clobbering what the analyst is mid-way through typing.
-  useEffect(() => {
-    if (client.q !== qDraftRef.current) setQDraft(client.q);
-  }, [client.q]);
+  // Adopt external changes to `q` (Back/Forward, the clear button, a pasted
+  // link) without clobbering what the analyst is mid-way through typing.
+  //
+  // This is React's "adjust state when a prop changes" pattern rather than an
+  // effect. Tracking the last adopted value in state answers the same question
+  // the previous version answered by comparing against the draft — but it
+  // answers it from state the effect can legitimately depend on, instead of
+  // needing `qDraft` smuggled past the dependency array in a ref written during
+  // render. React re-runs this render immediately with the updated state,
+  // before committing, so there is no extra paint and no post-render cascade.
+  const [adoptedQ, setAdoptedQ] = useState(client.q);
+  if (client.q !== adoptedQ) {
+    setAdoptedQ(client.q);
+    setQDraft(client.q);
+  }
 
   useEffect(() => {
     if (qDraft === client.q) return;

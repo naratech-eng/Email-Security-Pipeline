@@ -31,6 +31,7 @@ locals {
   scripts = {
     "phishing_filter.py" = { path = "files/phishing_filter.py", content_type = "text/x-python" }
     "setup-certbot.sh"   = { path = "files/setup-certbot.sh", content_type = "text/x-shellscript" }
+    "setup-mail-auth.sh" = { path = "files/setup-mail-auth.sh", content_type = "text/x-shellscript" }
   }
 }
 

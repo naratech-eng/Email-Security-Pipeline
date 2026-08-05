@@ -44,6 +44,14 @@ artifacts and evaluating them against the [PRD §6](prd.md) targets. See [Model 
 
 [github.com/naratech-eng/Email-Security-Pipeline](https://github.com/naratech-eng/Email-Security-Pipeline)
 
+### After cloning — install the pre-commit hooks
+
+```bash
+pip install pre-commit && pre-commit install
+```
+
+This is a **one-time step per clone** and it is not optional in spirit: the hooks run gitleaks before a commit is created, which is the only control that *prevents* a secret from reaching this public repository rather than reporting it afterward. A credential pushed to a public repo must be treated as compromised and rotated even if the commit is removed. See [DevSecOps §3.5](devsecops.md).
+
 ## Project Management
 
 - [Notion workspace](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3)
@@ -51,4 +59,3 @@ artifacts and evaluating them against the [PRD §6](prd.md) targets. See [Model 
 ## Course context
 
 CYT300 Capstone — deliverables are split into 10 milestones across a Research phase and a Deployment phase. See the [Roadmap](roadmap.md) for the milestone-to-week mapping.
-
