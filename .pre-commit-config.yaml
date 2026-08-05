@@ -1,0 +1,81 @@
+# SEC-PRECOMMIT — docs/devsecops.md §3.5.
+#
+# Why this file exists: every other control in this repo fires AFTER code is
+# pushed to a PUBLIC repository. For a lint error that's fine. For a secret it
+# is not — gitleaks in CI tells you a credential leaked, it cannot prevent the
+# leak, and anything pushed to a public repo must be treated as compromised and
+# rotated regardless of whether the commit is removed afterward. Pre-commit is
+# the only layer that prevents rather than reports.
+#
+# INSTALL (one-time, per clone — a repo cannot force hooks on you):
+#     pip install pre-commit && pre-commit install
+# Verify:
+#     pre-commit run --all-files
+#
+# These hooks run only on STAGED files, so installing this does not rewrite the
+# repository. They are also bypassable with `git commit --no-verify` — which is
+# exactly why the CI gitleaks job stays in place as the enforcement backstop.
+# Defence in depth, not a replacement.
+
+repos:
+  # ---------------------------------------------------------------------- #
+  # The reason this file exists.
+  # ---------------------------------------------------------------------- #
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1 # pinned to match the version sast.yml installs
+    hooks:
+      - id: gitleaks
+        name: gitleaks (block secrets before they are committed)
+        # Shares .gitleaks.toml with CI so local and CI can't disagree about
+        # what counts as a secret — a local pass that fails in CI (or worse,
+        # the reverse) trains people to ignore the hook.
+        args: [--config=.gitleaks.toml]
+
+  # ---------------------------------------------------------------------- #
+  # General hygiene + a second, format-based secret check.
+  # ---------------------------------------------------------------------- #
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key # catches PEM blocks gitleaks entropy rules can miss
+
+      # models/ and data/ are gitignored, but a stray `git add -f` or a new
+      # path that isn't covered yet would otherwise put a multi-MB artifact in
+      # history permanently. 5 MB is comfortably above any source file here.
+      - id: check-added-large-files
+        args: [--maxkb=5120]
+
+      - id: check-merge-conflict
+      - id: check-case-conflict # macOS/Linux mixed team; case-only renames break Linux CI
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        # Two trailing spaces are a meaningful line break in Markdown, so
+        # don't strip them there.
+        args: [--markdown-linebreak-ext=md]
+
+      - id: check-yaml
+        # Workflow files use GitHub's `on:` key, which some YAML tooling
+        # resolves to the boolean True; --unsafe skips full object construction
+        # and just checks the syntax parses, which is what we want here.
+        args: [--unsafe]
+      - id: check-json
+      - id: check-toml
+
+  # ---------------------------------------------------------------------- #
+  # Terraform fmt is a recurring cause of red CI (terraform-pr.yml runs
+  # `terraform fmt -check -recursive`). Catching it locally costs nothing.
+  # ---------------------------------------------------------------------- #
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.100.0
+    hooks:
+      - id: terraform_fmt
+
+# Deliberately NOT included:
+#   - ruff/black: docs/devsecops.md §3 records Python formatting as unenforced.
+#     Adding it here first would mean the hook and CI disagree, and it would
+#     reformat files unrelated to whatever you're committing. It belongs in CI
+#     and pre-commit together, as its own change.
+#   - bandit/semgrep/eslint: too slow for a commit hook and already blocking in
+#     CI. Pre-commit should stay fast enough that nobody reaches for
+#     --no-verify out of impatience; a hook people routinely skip protects
+#     nothing.

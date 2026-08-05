@@ -137,13 +137,25 @@ An honest read of how far left each control sits, because "we run scanners in CI
 
 | Stage | What runs there now | Verdict |
 |---|---|---|
-| **Editor / pre-commit** | *nothing* | **The real gap.** See below. |
+| **Editor / pre-commit** | gitleaks, detect-private-key, large-file guard, YAML/JSON/TOML validation, `terraform fmt` (`.pre-commit-config.yaml`) | Implemented (SEC-PRECOMMIT). Opt-in per clone — see below. |
 | **PR** | SAST (Bandit, Semgrep, CodeQL), secrets (gitleaks), deps (pip-audit, npm audit), IaC (Checkov, tfsec), lint, tests, Sonar | Strong. This is genuinely good coverage. |
 | **Post-merge (dev)** | Trivy image scan, ZAP passive baseline | Trivy is **one stage too late** — see below. |
 | **Nightly** | ZAP active, Schemathesis, testssl.sh, swaks mail tests | Appropriate — needs a live target. |
 | **Runtime** | WAF (COUNT mode), CloudTrail, Config, CloudWatch alarms | Appropriate, with the WAF caveat in §6. |
 
-**Gap 1 — no pre-commit hooks. This is the highest-value remaining improvement.** Every control above fires *after* code is already pushed to a public GitHub repo. For most findings that's fine — a lint error caught at PR costs a minute. For **secrets it is not fine**: gitleaks scanning history tells you a credential leaked, it doesn't prevent the leak. Once a secret is pushed to a public repo it must be treated as compromised and rotated, regardless of whether the commit is later removed — scrapers index public commits within seconds. A `.pre-commit-config.yaml` running gitleaks locally is the only control that prevents that rather than reporting it. GitHub push protection helps but only covers provider-recognised token formats, not (for example) a hardcoded DB password.
+**Gap 1 — pre-commit hooks: CLOSED (SEC-PRECOMMIT).** Every CI control fires *after* code is pushed to a public repo. For most findings that's fine — a lint error caught at PR costs a minute. For **secrets it is not**: gitleaks scanning history tells you a credential leaked, it doesn't prevent the leak. Once a secret is pushed to a public repo it must be treated as compromised and rotated regardless of whether the commit is later removed — scrapers index public commits within seconds. GitHub push protection helps but only covers provider-recognised token formats, not (for example) a hardcoded DB password.
+
+`.pre-commit-config.yaml` closes this. **It is opt-in per clone — a repository cannot force hooks on you**, so it only protects developers who run the install:
+
+```bash
+pip install pre-commit && pre-commit install
+```
+
+Two properties worth being explicit about:
+- It shares `.gitleaks.toml` with CI, so local and CI can't disagree about what counts as a secret. A hook that passes locally and fails in CI (or the reverse) trains people to ignore it.
+- It is bypassable with `git commit --no-verify`, which is **why the CI gitleaks job stays**. Pre-commit is defence in depth, not a replacement for the enforcement backstop.
+
+Deliberately excluded: `ruff`/`black` (Python formatting is unenforced in CI too — adding it here first would make hook and CI disagree), and Bandit/Semgrep/eslint (too slow for a commit hook and already blocking in CI). A hook slow enough that people reach for `--no-verify` out of impatience protects nothing.
 
 **Gap 2 — Trivy runs post-merge, not on the PR.** A PR that bumps the base image or adds a dependency with a HIGH CVE passes every check, merges, and only then fails `backend-deploy.yml` — after it's in `dev`, where someone has to revert under pressure rather than just push another commit. Moving the image build + Trivy scan into the PR checks would catch it while it's still cheap. The build already runs in CI; this is mostly a matter of where.
 
