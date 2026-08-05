@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 880" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1600" height="880" fill="#FFFFFF"/>
+
+  <text x="60" y="62" font-size="38" font-weight="bold" fill="#2E1065">Threat Model First, Tools Second</text>
+  <text x="60" y="100" font-size="23" fill="#6B7280">STRIDE tells you what you are defending against. The tooling is downstream of that &#8212; not the other way round.</text>
+
+  <!-- header -->
+  <rect x="60" y="124" width="1480" height="44" rx="8" fill="#2E1065"/>
+  <text x="80"  y="152" font-size="17" font-weight="bold" fill="#FFFFFF">STRIDE</text>
+  <text x="215" y="152" font-size="17" font-weight="bold" fill="#FFFFFF">THE THREAT, IN THIS SYSTEM</text>
+  <text x="680" y="152" font-size="17" font-weight="bold" fill="#FFFFFF">THE CONTROL WE BUILT</text>
+  <text x="1180" y="152" font-size="17" font-weight="bold" fill="#FFFFFF">HOW WE KNOW IT WORKS</text>
+
+  <!-- S -->
+  <rect x="60" y="176" width="1480" height="96" rx="8" fill="#F5F3FF" stroke="#C4B5FD" stroke-width="1.5"/>
+  <rect x="78" y="196" width="118" height="56" rx="8" fill="#7C3AED"/>
+  <text x="137" y="220" font-size="24" font-weight="bold" fill="#FFFFFF" text-anchor="middle">S</text>
+  <text x="137" y="242" font-size="14" fill="#EDE9FE" text-anchor="middle">Spoofing</text>
+  <text x="215" y="212" font-size="18" font-weight="bold" fill="#2E1065">A forged sender slips past detection</text>
+  <text x="215" y="238" font-size="16" fill="#6B7280">the core threat for a phishing filter</text>
+  <text x="680" y="212" font-size="17" fill="#3F3F46">Inbound SPF / DKIM / DMARC validation,</text>
+  <text x="680" y="236" font-size="17" fill="#3F3F46">feeding the ML model as a feature</text>
+  <text x="1180" y="212" font-size="16" fill="#3F3F46">Nightly swaks test asserts a</text>
+  <text x="1180" y="236" font-size="16" fill="#3F3F46">delivered mail carries the headers</text>
+
+  <!-- T -->
+  <rect x="60" y="278" width="1480" height="96" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+  <rect x="78" y="298" width="118" height="56" rx="8" fill="#2563EB"/>
+  <text x="137" y="322" font-size="24" font-weight="bold" fill="#FFFFFF" text-anchor="middle">T</text>
+  <text x="137" y="344" font-size="14" fill="#DBEAFE" text-anchor="middle">Tampering</text>
+  <text x="215" y="314" font-size="18" font-weight="bold" fill="#2E1065">Mail altered in transit, or a</text>
+  <text x="215" y="338" font-size="18" font-weight="bold" fill="#2E1065">model artifact swapped in S3</text>
+  <text x="680" y="314" font-size="17" fill="#3F3F46">TLS on SMTP with a real Let&#8217;s Encrypt</text>
+  <text x="680" y="338" font-size="17" fill="#3F3F46">cert; S3 versioning + KMS + IAM scoping</text>
+  <text x="1180" y="314" font-size="16" fill="#3F3F46">testssl.sh scans ALB and mail</text>
+  <text x="1180" y="338" font-size="16" fill="#3F3F46">listeners every night</text>
+
+  <!-- R -->
+  <rect x="60" y="380" width="1480" height="96" rx="8" fill="#F0FDFA" stroke="#5EEAD4" stroke-width="1.5"/>
+  <rect x="78" y="400" width="118" height="56" rx="8" fill="#0D9488"/>
+  <text x="137" y="424" font-size="24" font-weight="bold" fill="#FFFFFF" text-anchor="middle">R</text>
+  <text x="137" y="446" font-size="14" fill="#CCFBF1" text-anchor="middle">Repudiation</text>
+  <text x="215" y="416" font-size="18" font-weight="bold" fill="#2E1065">An analyst denies acting on a</text>
+  <text x="215" y="440" font-size="18" font-weight="bold" fill="#2E1065">flagged message</text>
+  <text x="680" y="416" font-size="17" fill="#3F3F46">Detections attributed from the verified</text>
+  <text x="680" y="440" font-size="17" fill="#3F3F46">Cognito token, never a client-sent field</text>
+  <text x="1180" y="416" font-size="16" fill="#3F3F46">Tightened after finding a fuzzer</text>
+  <text x="1180" y="440" font-size="16" fill="#3F3F46">could write rows under any name</text>
+
+  <!-- I -->
+  <rect x="60" y="482" width="1480" height="96" rx="8" fill="#FDF2F8" stroke="#F9A8D4" stroke-width="1.5"/>
+  <rect x="78" y="502" width="118" height="56" rx="8" fill="#DB2777"/>
+  <text x="137" y="526" font-size="24" font-weight="bold" fill="#FFFFFF" text-anchor="middle">I</text>
+  <text x="137" y="548" font-size="13" fill="#FCE7F3" text-anchor="middle">Info disclosure</text>
+  <text x="215" y="518" font-size="18" font-weight="bold" fill="#2E1065">The detections table leaks what</text>
+  <text x="215" y="542" font-size="18" font-weight="bold" fill="#2E1065">people were emailed about</text>
+  <text x="680" y="518" font-size="17" fill="#3F3F46">Raw bodies never stored at all; RDS in</text>
+  <text x="680" y="542" font-size="17" fill="#3F3F46">private subnets, KMS; 180-day purge</text>
+  <text x="1180" y="518" font-size="16" fill="#3F3F46">Purge job tested end-to-end</text>
+  <text x="1180" y="542" font-size="16" fill="#3F3F46">against a throwaway Postgres</text>
+
+  <!-- D -->
+  <rect x="60" y="584" width="1480" height="96" rx="8" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.5"/>
+  <rect x="78" y="604" width="118" height="56" rx="8" fill="#D97706"/>
+  <text x="137" y="628" font-size="24" font-weight="bold" fill="#FFFFFF" text-anchor="middle">D</text>
+  <text x="137" y="650" font-size="14" fill="#FEF3C7" text-anchor="middle">DoS</text>
+  <text x="215" y="620" font-size="18" font-weight="bold" fill="#2E1065">Huge or malformed mail stalls</text>
+  <text x="215" y="644" font-size="18" font-weight="bold" fill="#2E1065">the whole mail pipeline</text>
+  <text x="680" y="620" font-size="17" fill="#3F3F46">2 MB body cap, request timeout, circuit</text>
+  <text x="680" y="644" font-size="17" fill="#3F3F46">breaker &#8212; and the milter fails OPEN</text>
+  <text x="1180" y="620" font-size="16" fill="#3F3F46">Fail-open is itself a DAST case:</text>
+  <text x="1180" y="644" font-size="16" fill="#3F3F46">fuzzing must never block mail</text>
+
+  <!-- E -->
+  <rect x="60" y="686" width="1480" height="96" rx="8" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.5"/>
+  <rect x="78" y="706" width="118" height="56" rx="8" fill="#DC2626"/>
+  <text x="137" y="730" font-size="24" font-weight="bold" fill="#FFFFFF" text-anchor="middle">E</text>
+  <text x="137" y="752" font-size="13" fill="#FEE2E2" text-anchor="middle">Elevation</text>
+  <text x="215" y="722" font-size="18" font-weight="bold" fill="#2E1065">Open relay for spam, or an</text>
+  <text x="215" y="746" font-size="18" font-weight="bold" fill="#2E1065">unauthenticated inference API</text>
+  <text x="680" y="722" font-size="17" fill="#3F3F46">Port 25 receive-only; 587 SASL-only;</text>
+  <text x="680" y="746" font-size="17" fill="#3F3F46">every API route behind require_auth</text>
+  <text x="1180" y="722" font-size="16" fill="#3F3F46">Nightly swaks actively attempts a</text>
+  <text x="1180" y="746" font-size="16" fill="#3F3F46">relay and asserts 554 5.7.1</text>
+
+  <text x="60" y="822" font-size="19" fill="#6B7280">14 of 20 controls in the checklist are implemented and dated. The 6 that are not are listed by name with the reason &#8212; an unchecked box is a finding, not a gap in the doc.</text>
+  <text x="60" y="852" font-size="19" fill="#6B7280">Every mitigation above names the task that built it, so a reviewer can trace any claim from the threat model straight to the commit.</text>
+</svg>

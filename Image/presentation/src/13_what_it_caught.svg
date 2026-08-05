@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 790" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1600" height="790" fill="#FFFFFF"/>
+
+  <text x="60" y="62" font-size="38" font-weight="bold" fill="#2E1065">Evidence &#8212; What the Pipeline Actually Caught</text>
+  <text x="60" y="100" font-size="23" fill="#6B7280">A gate that never finds anything is decoration. These are real defects the gates surfaced in this project.</text>
+
+  <!-- CARD 1 -->
+  <rect x="60" y="150" width="460" height="195" rx="12" fill="#FEF2F2" stroke="#DC2626" stroke-width="2.5"/>
+  <rect x="80" y="168" width="150" height="26" rx="13" fill="#DC2626"/>
+  <text x="155" y="187" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">KNOWN CVE</text>
+  <text x="80" y="224" font-size="19" font-weight="bold" fill="#2E1065">Our own security scanner</text>
+  <text x="80" y="248" font-size="19" font-weight="bold" fill="#2E1065">was the vulnerable thing</text>
+  <text x="80" y="282" font-size="16" fill="#6B7280">Found by: the scan job&#8217;s own annotation</text>
+  <text x="80" y="308" font-size="16" fill="#3F3F46">sonarqube-scan-action v5 carried a</text>
+  <text x="80" y="330" font-size="16" fill="#3F3F46">published CVE. Bumped to v6.</text>
+
+  <!-- CARD 2 -->
+  <rect x="570" y="150" width="460" height="195" rx="12" fill="#FEF2F2" stroke="#DC2626" stroke-width="2.5"/>
+  <rect x="590" y="168" width="150" height="26" rx="13" fill="#DC2626"/>
+  <text x="665" y="187" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">BLOCKER</text>
+  <text x="590" y="224" font-size="19" font-weight="bold" fill="#2E1065">Piping the internet</text>
+  <text x="590" y="248" font-size="19" font-weight="bold" fill="#2E1065">straight into bash</text>
+  <text x="590" y="282" font-size="16" fill="#6B7280">Found by: SonarCloud S8482</text>
+  <text x="590" y="308" font-size="16" fill="#3F3F46">curl | bash ran an unverified script.</text>
+  <text x="590" y="330" font-size="16" fill="#3F3F46">Now a sha256-checked download.</text>
+
+  <!-- CARD 3 -->
+  <rect x="1080" y="150" width="460" height="195" rx="12" fill="#FFF7ED" stroke="#EA580C" stroke-width="2.5"/>
+  <rect x="1100" y="168" width="185" height="26" rx="13" fill="#EA580C"/>
+  <text x="1192" y="187" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">SUPPLY CHAIN</text>
+  <text x="1100" y="224" font-size="19" font-weight="bold" fill="#2E1065">~20 actions pinned to</text>
+  <text x="1100" y="248" font-size="19" font-weight="bold" fill="#2E1065">tags, which can move</text>
+  <text x="1100" y="282" font-size="16" fill="#6B7280">Found by: SonarCloud S7637</text>
+  <text x="1100" y="308" font-size="16" fill="#3F3F46">A tag can be repointed silently.</text>
+  <text x="1100" y="330" font-size="16" fill="#3F3F46">All now pinned to commit SHA.</text>
+
+  <!-- CARD 4 -->
+  <rect x="60" y="360" width="460" height="195" rx="12" fill="#FEF2F2" stroke="#DC2626" stroke-width="2.5"/>
+  <rect x="80" y="378" width="215" height="26" rx="13" fill="#DC2626"/>
+  <text x="187" y="397" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">SILENT CONTROL GAP</text>
+  <text x="80" y="434" font-size="19" font-weight="bold" fill="#2E1065">A control that existed on</text>
+  <text x="80" y="458" font-size="19" font-weight="bold" fill="#2E1065">paper but never ran</text>
+  <text x="80" y="492" font-size="16" fill="#6B7280">Found by: auditing docs against code</text>
+  <text x="80" y="518" font-size="16" fill="#3F3F46">No inbound SPF/DKIM/DMARC, so live</text>
+  <text x="80" y="540" font-size="16" fill="#3F3F46">mail always scored has_spf = 0.</text>
+
+  <!-- CARD 5 -->
+  <rect x="570" y="360" width="460" height="195" rx="12" fill="#FFF7ED" stroke="#EA580C" stroke-width="2.5"/>
+  <rect x="590" y="378" width="200" height="26" rx="13" fill="#EA580C"/>
+  <text x="690" y="397" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">SILENT BREAKAGE</text>
+  <text x="590" y="434" font-size="19" font-weight="bold" fill="#2E1065">TLS key permissions</text>
+  <text x="590" y="458" font-size="19" font-weight="bold" fill="#2E1065">broke outbound mail</text>
+  <text x="590" y="492" font-size="16" fill="#6B7280">Found by: chasing a real symptom</text>
+  <text x="590" y="518" font-size="16" fill="#3F3F46">Postfix could not read the LE key on</text>
+  <text x="590" y="540" font-size="16" fill="#3F3F46">:587. Would recur on every renewal.</text>
+
+  <!-- CARD 6 -->
+  <rect x="1080" y="360" width="460" height="195" rx="12" fill="#F5F3FF" stroke="#7C3AED" stroke-width="2.5"/>
+  <rect x="1100" y="378" width="215" height="26" rx="13" fill="#7C3AED"/>
+  <text x="1207" y="397" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">CORRECTNESS DEBT</text>
+  <text x="1100" y="434" font-size="19" font-weight="bold" fill="#2E1065">9 pre-existing React</text>
+  <text x="1100" y="458" font-size="19" font-weight="bold" fill="#2E1065">correctness bugs</text>
+  <text x="1100" y="492" font-size="16" fill="#6B7280">Found by: the new ESLint config</text>
+  <text x="1100" y="518" font-size="16" fill="#3F3F46">Not security &#8212; reported honestly as</text>
+  <text x="1100" y="540" font-size="16" fill="#3F3F46">debt, then fixed at the source.</text>
+
+  <!-- clean band -->
+  <rect x="60" y="575" width="1480" height="108" rx="12" fill="#ECFDF5" stroke="#059669" stroke-width="2.5"/>
+  <text x="80" y="609" font-size="21" font-weight="bold" fill="#065F46">Equally important &#8212; where the gates came back clean, and why that is still a result:</text>
+  <text x="80" y="640" font-size="18" fill="#3F3F46">OWASP ZAP: 145 / 145 security checks passed, 0 High &#183; Checkov + tfsec: 0 failures, every suppression carrying a written justification</text>
+  <text x="80" y="666" font-size="18" fill="#3F3F46">gitleaks over all 142 commits: 1 hit, correctly triaged as a false positive (a public Route53 zone ID) and allowlisted by shape, not by silencing the rule</text>
+
+  <text x="60" y="726" font-size="19" fill="#6B7280">Note the pattern: the two most serious findings were in the security tooling and the security documentation &#8212; not in the application code.</text>
+  <text x="60" y="756" font-size="19" fill="#6B7280">Automated gates catch the known classes. Reading your own claims against your own code catches the ones no scanner is looking for.</text>
+</svg>

@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 990" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1600" height="990" fill="#FFFFFF"/>
+
+  <text x="60" y="66" font-size="38" font-weight="bold" fill="#2E1065">Every Security Gate, and Exactly Where It Runs</text>
+  <text x="60" y="106" font-size="24" fill="#6B7280">11 GitHub Actions workflows &#183; earlier stages are cheaper, so each check sits as far left as it can</text>
+
+  <!-- ============ LANE 1 : LOCAL ============ -->
+  <rect x="60" y="140" width="1480" height="100" rx="14" fill="#ECFDF5" stroke="#059669" stroke-width="3"/>
+  <text x="80" y="174" font-size="23" font-weight="bold" fill="#065F46">1 &#183; LOCAL</text>
+  <text x="80" y="198" font-size="17" fill="#047857">before a commit exists</text>
+  <rect x="80" y="208" width="150" height="24" rx="12" fill="#059669"/>
+  <text x="155" y="225" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">PREVENTS</text>
+
+  <g>
+    <rect x="400" y="158" width="247" height="64" rx="9" fill="#FFFFFF" stroke="#059669" stroke-width="2"/>
+    <text x="523" y="184" font-size="20" font-weight="bold" fill="#065F46" text-anchor="middle">gitleaks</text>
+    <text x="523" y="208" font-size="16" fill="#52525B" text-anchor="middle">secret never reaches git</text>
+
+    <rect x="697" y="158" width="247" height="64" rx="9" fill="#FFFFFF" stroke="#059669" stroke-width="2"/>
+    <text x="820" y="184" font-size="20" font-weight="bold" fill="#065F46" text-anchor="middle">detect-private-key</text>
+    <text x="820" y="208" font-size="16" fill="#52525B" text-anchor="middle">PEM blocks</text>
+
+    <rect x="994" y="158" width="247" height="64" rx="9" fill="#FFFFFF" stroke="#059669" stroke-width="2"/>
+    <text x="1117" y="184" font-size="20" font-weight="bold" fill="#065F46" text-anchor="middle">terraform fmt</text>
+    <text x="1117" y="208" font-size="16" fill="#52525B" text-anchor="middle">catch CI failure early</text>
+
+    <rect x="1291" y="158" width="247" height="64" rx="9" fill="#FFFFFF" stroke="#059669" stroke-width="2"/>
+    <text x="1414" y="184" font-size="20" font-weight="bold" fill="#065F46" text-anchor="middle">large-file guard</text>
+    <text x="1414" y="208" font-size="16" fill="#52525B" text-anchor="middle">no model blobs in git</text>
+  </g>
+
+  <!-- ============ LANE 2 : PULL REQUEST ============ -->
+  <rect x="60" y="256" width="1480" height="286" rx="14" fill="#FDF2F8" stroke="#DB2777" stroke-width="3.5"/>
+  <text x="80" y="292" font-size="23" font-weight="bold" fill="#9D174D">2 &#183; PULL REQUEST</text>
+  <text x="80" y="316" font-size="17" fill="#BE185D">the main gate</text>
+  <rect x="80" y="328" width="180" height="26" rx="13" fill="#BE185D"/>
+  <text x="170" y="347" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">BLOCKS MERGE</text>
+  <text x="80" y="380" font-size="16" fill="#9D174D">HIGH / CRITICAL</text>
+  <text x="80" y="401" font-size="16" fill="#9D174D">= red check, no merge</text>
+  <text x="80" y="436" font-size="15" fill="#BE185D">sast.yml</text>
+  <text x="80" y="457" font-size="15" fill="#BE185D">terraform-pr.yml</text>
+  <text x="80" y="478" font-size="15" fill="#BE185D">backend-image-scan.yml</text>
+  <text x="80" y="499" font-size="15" fill="#BE185D">backend-tests.yml</text>
+  <text x="80" y="520" font-size="15" fill="#BE185D">sonarcloud.yml</text>
+
+  <!-- row A : our own code -->
+  <text x="400" y="288" font-size="17" font-weight="bold" fill="#9D174D">OUR OWN SOURCE CODE &#8212; SAST</text>
+  <g>
+    <rect x="400" y="298" width="247" height="60" rx="9" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <text x="523" y="322" font-size="20" font-weight="bold" fill="#9D174D" text-anchor="middle">Bandit</text>
+    <text x="523" y="345" font-size="15" fill="#52525B" text-anchor="middle">Python: eval, subprocess</text>
+
+    <rect x="697" y="298" width="247" height="60" rx="9" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <text x="820" y="322" font-size="20" font-weight="bold" fill="#9D174D" text-anchor="middle">Semgrep</text>
+    <text x="820" y="345" font-size="15" fill="#52525B" text-anchor="middle">OWASP Top Ten rules</text>
+
+    <rect x="994" y="298" width="247" height="60" rx="9" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <text x="1117" y="322" font-size="20" font-weight="bold" fill="#9D174D" text-anchor="middle">CodeQL</text>
+    <text x="1117" y="345" font-size="15" fill="#52525B" text-anchor="middle">taint across functions</text>
+
+    <rect x="1291" y="298" width="247" height="60" rx="9" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <text x="1414" y="322" font-size="20" font-weight="bold" fill="#9D174D" text-anchor="middle">ESLint-security</text>
+    <text x="1414" y="345" font-size="15" fill="#52525B" text-anchor="middle">DOM-XSS in dashboard</text>
+  </g>
+
+  <!-- row B : everything we did not write -->
+  <text x="400" y="388" font-size="17" font-weight="bold" fill="#9D174D">CODE + CONFIG WE DID NOT WRITE &#8212; SCA / IaC / image / secrets</text>
+  <g>
+    <rect x="400" y="398" width="247" height="60" rx="9" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <text x="523" y="422" font-size="20" font-weight="bold" fill="#9D174D" text-anchor="middle">gitleaks</text>
+    <text x="523" y="445" font-size="15" fill="#52525B" text-anchor="middle">full git history</text>
+
+    <rect x="697" y="398" width="247" height="60" rx="9" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <text x="820" y="422" font-size="19" font-weight="bold" fill="#9D174D" text-anchor="middle">pip-audit &#183; npm audit</text>
+    <text x="820" y="445" font-size="15" fill="#52525B" text-anchor="middle">known CVEs in deps</text>
+
+    <rect x="994" y="398" width="247" height="60" rx="9" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <text x="1117" y="422" font-size="20" font-weight="bold" fill="#9D174D" text-anchor="middle">Checkov &#183; tfsec</text>
+    <text x="1117" y="445" font-size="15" fill="#52525B" text-anchor="middle">Terraform misconfig</text>
+
+    <rect x="1291" y="398" width="247" height="60" rx="9" fill="#FFFFFF" stroke="#DB2777" stroke-width="2"/>
+    <text x="1414" y="422" font-size="20" font-weight="bold" fill="#9D174D" text-anchor="middle">Trivy</text>
+    <text x="1414" y="445" font-size="15" fill="#52525B" text-anchor="middle">CVEs in container image</text>
+  </g>
+
+  <!-- row C : correctness + quality -->
+  <g>
+    <rect x="400" y="472" width="247" height="56" rx="9" fill="#FCE7F3" stroke="#F472B6" stroke-width="2"/>
+    <text x="523" y="495" font-size="19" font-weight="bold" fill="#9D174D" text-anchor="middle">pytest + vitest</text>
+    <text x="523" y="517" font-size="15" fill="#52525B" text-anchor="middle">real Postgres + models</text>
+
+    <rect x="697" y="472" width="247" height="56" rx="9" fill="#FCE7F3" stroke="#F472B6" stroke-width="2"/>
+    <text x="820" y="495" font-size="19" font-weight="bold" fill="#9D174D" text-anchor="middle">SonarCloud</text>
+    <text x="820" y="517" font-size="15" fill="#52525B" text-anchor="middle">new-code coverage gate</text>
+
+    <rect x="994" y="472" width="247" height="56" rx="9" fill="#FCE7F3" stroke="#F472B6" stroke-width="2"/>
+    <text x="1117" y="495" font-size="19" font-weight="bold" fill="#9D174D" text-anchor="middle">actionlint</text>
+    <text x="1117" y="517" font-size="15" fill="#52525B" text-anchor="middle">workflow correctness</text>
+
+    <rect x="1291" y="472" width="247" height="56" rx="9" fill="#FCE7F3" stroke="#F472B6" stroke-width="2"/>
+    <text x="1414" y="495" font-size="19" font-weight="bold" fill="#9D174D" text-anchor="middle">terraform plan</text>
+    <text x="1414" y="517" font-size="15" fill="#52525B" text-anchor="middle">posted to the PR</text>
+  </g>
+
+  <!-- ============ LANE 3 : MERGE ============ -->
+  <rect x="60" y="558" width="1480" height="92" rx="14" fill="#EDE9FE" stroke="#6D28D9" stroke-width="3"/>
+  <text x="80" y="592" font-size="23" font-weight="bold" fill="#2E1065">3 &#183; MERGE TO dev</text>
+  <text x="80" y="618" font-size="17" fill="#5B21B6">deploy to the live stack</text>
+
+  <g>
+    <rect x="697" y="572" width="247" height="62" rx="9" fill="#FFFFFF" stroke="#6D28D9" stroke-width="2"/>
+    <text x="820" y="597" font-size="20" font-weight="bold" fill="#2E1065" text-anchor="middle">terraform apply</text>
+    <text x="820" y="620" font-size="15" fill="#52525B" text-anchor="middle">infra converges</text>
+
+    <rect x="994" y="572" width="247" height="62" rx="9" fill="#FFFFFF" stroke="#6D28D9" stroke-width="2"/>
+    <text x="1117" y="597" font-size="20" font-weight="bold" fill="#2E1065" text-anchor="middle">ECS rolling deploy</text>
+    <text x="1117" y="620" font-size="15" fill="#52525B" text-anchor="middle">+ /health verify</text>
+
+    <rect x="1291" y="572" width="247" height="62" rx="9" fill="#FFFFFF" stroke="#6D28D9" stroke-width="2"/>
+    <text x="1414" y="597" font-size="20" font-weight="bold" fill="#2E1065" text-anchor="middle">ZAP baseline</text>
+    <text x="1414" y="620" font-size="15" fill="#52525B" text-anchor="middle">passive, informational</text>
+  </g>
+
+  <!-- ============ LANE 4 : NIGHTLY ============ -->
+  <rect x="60" y="666" width="1480" height="108" rx="14" fill="#FEF3C7" stroke="#D97706" stroke-width="3"/>
+  <text x="80" y="700" font-size="23" font-weight="bold" fill="#92400E">4 &#183; NIGHTLY &#8212; DAST</text>
+  <text x="80" y="724" font-size="17" fill="#B45309">attack the running system</text>
+  <rect x="80" y="734" width="215" height="26" rx="13" fill="#B45309"/>
+  <text x="187" y="753" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">GATES PROMOTION</text>
+
+  <g>
+    <rect x="400" y="686" width="247" height="66" rx="9" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+    <text x="523" y="712" font-size="20" font-weight="bold" fill="#92400E" text-anchor="middle">OWASP ZAP</text>
+    <text x="523" y="736" font-size="15" fill="#52525B" text-anchor="middle">full active attack scan</text>
+
+    <rect x="697" y="686" width="247" height="66" rx="9" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+    <text x="820" y="712" font-size="20" font-weight="bold" fill="#92400E" text-anchor="middle">Schemathesis</text>
+    <text x="820" y="736" font-size="15" fill="#52525B" text-anchor="middle">fuzzes every endpoint</text>
+
+    <rect x="994" y="686" width="247" height="66" rx="9" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+    <text x="1117" y="712" font-size="20" font-weight="bold" fill="#92400E" text-anchor="middle">testssl.sh</text>
+    <text x="1117" y="736" font-size="15" fill="#52525B" text-anchor="middle">TLS: ALB + mail server</text>
+
+    <rect x="1291" y="686" width="247" height="66" rx="9" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+    <text x="1414" y="712" font-size="20" font-weight="bold" fill="#92400E" text-anchor="middle">swaks</text>
+    <text x="1414" y="736" font-size="15" fill="#52525B" text-anchor="middle">open relay + spoof tests</text>
+  </g>
+
+  <!-- ============ LANE 5 : RUNTIME ============ -->
+  <rect x="60" y="790" width="1480" height="92" rx="14" fill="#F3F4F6" stroke="#4B5563" stroke-width="3"/>
+  <text x="80" y="824" font-size="23" font-weight="bold" fill="#1F2937">5 &#183; RUNTIME</text>
+  <text x="80" y="850" font-size="17" fill="#4B5563">assume something got through</text>
+
+  <g>
+    <rect x="697" y="804" width="247" height="62" rx="9" fill="#FFFFFF" stroke="#4B5563" stroke-width="2"/>
+    <text x="820" y="829" font-size="20" font-weight="bold" fill="#1F2937" text-anchor="middle">AWS WAF</text>
+    <text x="820" y="852" font-size="15" fill="#52525B" text-anchor="middle">managed rules, count mode</text>
+
+    <rect x="994" y="804" width="247" height="62" rx="9" fill="#FFFFFF" stroke="#4B5563" stroke-width="2"/>
+    <text x="1117" y="829" font-size="20" font-weight="bold" fill="#1F2937" text-anchor="middle">CloudTrail + Config</text>
+    <text x="1117" y="852" font-size="15" fill="#52525B" text-anchor="middle">who did what, when</text>
+
+    <rect x="1291" y="804" width="247" height="62" rx="9" fill="#FFFFFF" stroke="#4B5563" stroke-width="2"/>
+    <text x="1414" y="829" font-size="20" font-weight="bold" fill="#1F2937" text-anchor="middle">CloudWatch alarms</text>
+    <text x="1414" y="852" font-size="15" fill="#52525B" text-anchor="middle">5xx, latency, RDS &#8594; SNS</text>
+  </g>
+
+  <text x="60" y="925" font-size="18" fill="#6B7280">Reported but not blocking, deliberately: CodeQL (untriaged first baseline) and the ZAP passive baseline &#8212; a gate that always fails gets bypassed.</text>
+  <text x="60" y="955" font-size="18" fill="#6B7280">Not available: GuardDuty and Security Hub are blocked at the AWS account tier. The Terraform is written and would apply on a commercial account.</text>
+</svg>
