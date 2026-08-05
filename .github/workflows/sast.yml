@@ -96,7 +96,7 @@ jobs:
         working-directory: backend
 
   frontend-audit:
-    name: npm audit + eslint
+    name: npm audit + eslint + vitest
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
@@ -132,6 +132,14 @@ jobs:
       # detect-object-injection noise) stay visible without blocking.
       - name: eslint (incl. eslint-plugin-security)
         run: npm run lint
+        working-directory: frontend
+
+      # CI-T3 — vitest already ran inside sonarcloud.yml, but that step is
+      # continue-on-error (Sonar's job is to upload coverage, not gate merge
+      # -- backend-tests.yml/this job own gating). That meant a failing
+      # frontend test never actually blocked a PR anywhere. This does.
+      - name: vitest
+        run: npm run test
         working-directory: frontend
 
   # SEC-SAST — Semgrep. Complements Bandit: Bandit is Python-only and
@@ -253,7 +261,7 @@ jobs:
         run: |
           FAILED=""
           [ "${{ needs.python-sast.result }}"    == "failure" ] && FAILED="$FAILED bandit/pip-audit"
-          [ "${{ needs.frontend-audit.result }}" == "failure" ] && FAILED="$FAILED npm-audit/eslint"
+          [ "${{ needs.frontend-audit.result }}" == "failure" ] && FAILED="$FAILED npm-audit/eslint/vitest"
           [ "${{ needs.actionlint.result }}"     == "failure" ] && FAILED="$FAILED actionlint"
           [ "${{ needs.semgrep.result }}"        == "failure" ] && FAILED="$FAILED semgrep"
           [ "${{ needs.gitleaks.result }}"       == "failure" ] && FAILED="$FAILED gitleaks"
