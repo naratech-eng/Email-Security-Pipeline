@@ -253,7 +253,7 @@ interface UrlDetail {
 }
 ```
 
-### `POST /analyze/email` (multipart: `file` | `text`, `source`, `submitted_by`) → 
+### `POST /analyze/email` (multipart: `file` | `text`, `source`, `submitted_by`) →
 
 ```ts
 interface AnalyzeResponse {

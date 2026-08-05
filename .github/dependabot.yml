@@ -6,6 +6,26 @@
 # tell you a vulnerable version is installed, Dependabot opens the PR that
 # upgrades it. Without this, a CVE surfaced by pip-audit blocks every PR until
 # someone manually bumps the pin.
+#
+# ⚠️ ONE-TIME SETUP NEEDED, or every Dependabot PR shows red checks:
+# Dependabot-authored PRs run with a restricted context and CANNOT read normal
+# repository Actions secrets -- GitHub keeps a SEPARATE store for them at
+# Settings > Secrets and variables > Dependabot. Until the secrets below are
+# copied into that store, `backend-tests.yml` and `terraform-pr.yml` will fail
+# on every Dependabot PR at their "Configure AWS credentials (OIDC)" step,
+# because `secrets.AWS_OIDC_ROLE_ARN` resolves to an empty string:
+#
+#     AWS_OIDC_ROLE_ARN, TF_VAR_DB_PASSWORD, TF_VAR_KEY_NAME,
+#     TF_VAR_AMPLIFY_GITHUB_ACCESS_TOKEN
+#
+# Copying them (rather than making the workflows skip on Dependabot PRs) is
+# the right call: a dependency bump is precisely the change you most want the
+# full test suite to run against. Skipping tests there would defeat the point.
+#
+# open-pull-requests-limit is kept low deliberately -- each PR triggers ~14 CI
+# jobs, and four ecosystems at the default of 5 could put 20 PRs and ~280 jobs
+# in the queue at once. Actions minutes are free on this public repo, so this
+# is about review load and queue contention, not cost.
 version: 2
 
 updates:
@@ -14,7 +34,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     labels: [dependencies, security]
     commit-message:
       prefix: "chore(deps)"
@@ -24,7 +44,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     labels: [dependencies, security]
     commit-message:
       prefix: "chore(deps)"
@@ -44,7 +64,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     labels: [dependencies, ci]
     commit-message:
       prefix: "chore(ci)"
