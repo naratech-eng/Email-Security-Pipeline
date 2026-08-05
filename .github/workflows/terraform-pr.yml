@@ -22,7 +22,7 @@ jobs:
     outputs:
       infra: ${{ steps.filter.outputs.infra }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # v4 is the same action on the node24 runtime. v3 is node20, which GitHub
       # deprecated and now force-runs on node24 regardless. v4.0.0 changed
@@ -45,7 +45,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: needs.changes.outputs.infra == 'true'
 
       - name: Setup Terraform
@@ -102,7 +102,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: needs.changes.outputs.infra == 'true'
 
       - name: Configure AWS credentials (OIDC)
