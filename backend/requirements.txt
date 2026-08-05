@@ -1,24 +1,44 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-pydantic>=2.9
-boto3>=1.35
-pyjwt[crypto]>=2.9       # M7-T14 — verify Cognito access-token JWTs against JWKS
-python-multipart>=0.0.9  # required by FastAPI for Form/File (/analyze/email upload)
-psycopg[binary]>=3.2     # M7-T15 detections store (RDS Postgres)
-alembic>=1.13            # M7-T15 schema migrations
-sqlalchemy>=2.0          # alembic dependency (migrations use plain SQL, not the ORM)
-joblib>=1.4
-scikit-learn>=1.5
-pandas>=2.2
-numpy>=1.26
+# Pinned to exact versions (SonarCloud S8544 / docs/devsecops.md §3.5 --
+# "Python dependencies unpinned" was a named gap; this closes it). Pins are
+# the newest-compatible resolution as of 2026-08-05 via `pip-compile` against
+# the previous >= floors -- deliberately NOT rolled back to those floors:
+# numpy>=1.26 has no wheels for Python 3.13 (this project's runtime), so the
+# unpinned installs were already silently resolving to a modern release on
+# every fresh build. Pinning today's resolution doesn't add new version risk
+# over what was already running; it stops FUTURE silent drift and makes
+# builds reproducible. Dependabot (.github/dependabot.yml) now owns keeping
+# these current instead of floating `>=` ranges doing it implicitly.
+#
+# Scoped to DIRECT dependencies only, not a full pip-compile transitive lock
+# (~75 packages) -- simpler to maintain, and Dependabot's pip ecosystem
+# operates cleanly on direct pins without fighting a resolver-locked file.
+#
+# ⚠️ This changes what pandas/scikit-learn/tensorflow actually load, which
+# matters because the M6 models were joblib/TF-serialized against whatever
+# versions were installed at training time, possibly much older than these.
+# backend-tests.yml's integration tests load the REAL S3 models -- do not
+# merge a PR touching this file until that workflow is green.
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+pydantic==2.13.4
+boto3==1.43.64
+pyjwt[crypto]==2.13.0    # M7-T14 — verify Cognito access-token JWTs against JWKS
+python-multipart==0.0.32 # required by FastAPI for Form/File (/analyze/email upload)
+psycopg[binary]==3.3.4   # M7-T15 detections store (RDS Postgres)
+alembic==1.19.0          # M7-T15 schema migrations
+sqlalchemy==2.0.51       # alembic dependency (migrations use plain SQL, not the ORM)
+joblib==1.5.3
+scikit-learn==1.9.0
+pandas==3.0.5
+numpy==2.5.1
 
 # url_charcnn (M6-T3) is the primary URL model (F1 0.9755, ~1MB on disk).
 # URLPredictor falls back to the Random Forest (url_rf, F1 0.866) only if
 # tensorflow is unavailable — that fallback is currently a 1.7GB artifact
 # (unbounded tree depth in M6-T4 training) that doesn't fit the Fargate
 # task's 1024MB memory limit, so keep tensorflow installed for now.
-tensorflow>=2.16
+tensorflow==2.21.0
 
 # Test-only: starlette's TestClient (used by tests/test_integration_predict.py)
 # requires httpx2, not httpx, as of the fastapi/starlette versions above.
-httpx2>=2.0
+httpx2==2.9.1

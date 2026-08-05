@@ -42,20 +42,20 @@ jobs:
       DB_CREDENTIALS_JSON: '{"username":"espuser","password":"esppass","host":"127.0.0.1","port":5432,"dbname":"espdb"}'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       # Integration tests exercise the real M6 models. They aren't in git
       # (models/ is gitignored — see docs/m7-t1-fastapi-service.md), so
       # inference.py downloads them from S3 on first use via boto3, the same
       # way the ECS task will in production.
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
           cache: "pip"
@@ -64,7 +64,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt pytest==9.1.1
         working-directory: backend
 
       - name: Run detections table migration
