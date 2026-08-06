@@ -59,4 +59,4 @@ Per `docs/threat-model.md` §5:
 
 - **Mailbox content itself** (the actual Maildir on the mail server, IMAP-accessible mail) has no retention policy at all — this document only covers the `detections` table. A real deployment would need one.
 - **CloudTrail/Config/WAF logs** (M9-T4) have their own lifecycle (90-day Standard-IA transition, 180-day Glacier transition, `infra/modules/security_baseline`) — unrelated to this policy, not duplicated here.
-- **Backups**: RDS automated backups (7-day retention, `docs/devsecops.md` §8) will contain purged rows until they age out of the backup window — a full data-subject deletion isn't complete until backups age out too. Not addressed by this task.
+- **Backups**: RDS automated backups (1-day retention — the free-tier maximum; `infra/modules/rds_postgres/main.tf` carries a note to raise it to 7 on a paid account) will contain purged rows until they age out of the backup window — a full data-subject deletion isn't complete until backups age out too. Not addressed by this task.
