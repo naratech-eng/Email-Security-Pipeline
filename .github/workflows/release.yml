@@ -1,0 +1,233 @@
+name: Release
+
+# Cuts a semver tag + GitHub Release on every merge to naratech, with the
+# changelog built from Conventional Commit subjects since the previous tag.
+#
+# Why the changelog lives in the Release body and NOT in a committed
+# CHANGELOG.md: naratech has branch protection with required status checks
+# (strict), so a CI push of a changelog commit would either be rejected or
+# need protection bypassed. Tags and Releases are not covered by branch
+# protection, so this path needs no exception. The Release body is also what
+# actually renders on the repo's Releases page, which is the goal.
+#
+# Version comes from the commits, not a file, so there is no VERSION constant
+# to forget to bump and no chance of the tag disagreeing with the source.
+
+on:
+  push:
+    branches: [naratech]
+
+# Two merges landing close together would otherwise race to read "the latest
+# tag" and could compute the same next version twice. Queue them instead;
+# cancel-in-progress is deliberately false because a skipped release is a
+# missing tag, not a stale build that can be safely thrown away.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create tags and releases
+
+jobs:
+  release:
+    name: tag + release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0 # full history + tags: the version is derived from them
+
+      - name: Work out the next version from the commits
+        id: version
+        run: |
+          set -euo pipefail
+
+          # Seed value for the very first release. Everything after this is
+          # computed, so this constant is read exactly once in the repo's life.
+          FIRST_VERSION="0.9.0"
+
+          LAST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1)
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous tag — seeding the first release at v$FIRST_VERSION."
+            {
+              echo "version=$FIRST_VERSION"
+              echo "last_tag="
+              echo "bump=initial"
+              echo "release=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Previous tag: $LAST_TAG"
+
+          # Merge commits are excluded (--no-merges): their subjects are
+          # "Merge pull request #N from ..." which carries no Conventional
+          # Commit type and would just be noise in the changelog.
+          SUBJECTS=$(git log --no-merges --pretty=%s "$LAST_TAG"..HEAD)
+          BODIES=$(git log --no-merges --pretty=%B "$LAST_TAG"..HEAD)
+
+          if [ -z "$SUBJECTS" ]; then
+            echo "No non-merge commits since $LAST_TAG — nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Precedence: breaking > feat > fix/perf. Anything else (docs, ci,
+          # chore, refactor, test, style) is real work but changes nothing a
+          # consumer of this repo can observe, so it ships in the NEXT release
+          # that has a user-visible change rather than minting a version of
+          # its own. Without this, a docs-only merge would publish a release
+          # whose notes say nothing happened.
+          BUMP=""
+          if echo "$BODIES" | grep -qE '^BREAKING[ -]CHANGE:' \
+            || echo "$SUBJECTS" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+            BUMP="major"
+          elif echo "$SUBJECTS" | grep -qE '^feat(\([^)]*\))?:'; then
+            BUMP="minor"
+          elif echo "$SUBJECTS" | grep -qE '^(fix|perf)(\([^)]*\))?:'; then
+            BUMP="patch"
+          fi
+
+          if [ -z "$BUMP" ]; then
+            echo "Only non-releasable commit types since $LAST_TAG (docs/ci/chore/etc) — skipping."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CURRENT="${LAST_TAG#v}"
+          MAJOR="${CURRENT%%.*}"
+          REST="${CURRENT#*.}"
+          MINOR="${REST%%.*}"
+          PATCH="${REST#*.}"
+
+          # While on 0.x the API is explicitly unstable, so a breaking change
+          # bumps the minor rather than jumping to 1.0.0 -- otherwise the
+          # first `feat!:` would silently declare the project stable, which is
+          # a claim about maturity, not a version-number detail.
+          if [ "$BUMP" = "major" ] && [ "$MAJOR" -eq 0 ]; then
+            echo "Breaking change on a 0.x line: bumping minor, not major (1.0.0 stays a deliberate choice)."
+            BUMP="minor"
+          fi
+
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          echo "Bump: $BUMP -> v$MAJOR.$MINOR.$PATCH"
+          {
+            echo "version=$MAJOR.$MINOR.$PATCH"
+            echo "last_tag=$LAST_TAG"
+            echo "bump=$BUMP"
+            echo "release=true"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build the changelog
+        if: steps.version.outputs.release == 'true'
+        env:
+          LAST_TAG: ${{ steps.version.outputs.last_tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          BUMP: ${{ steps.version.outputs.bump }}
+        run: |
+          set -euo pipefail
+
+          RANGE="${LAST_TAG:+$LAST_TAG..}HEAD"
+
+          # One section per Conventional Commit type. The scope is kept and
+          # bolded because in this repo it names the milestone/task (e.g.
+          # "fix(m9-t5):"), which is how a reader traces an entry back to the
+          # work that produced it. The second sed drops the "**:**" artifact
+          # left behind when a commit has no scope at all.
+          # SC2016 is disabled deliberately: the backticks in the replacement
+          # are literal markdown (they render the short SHA as code), not a
+          # command substitution that failed to expand.
+          # shellcheck disable=SC2016
+          format_entries() {
+            sed -E 's/^([a-z]+)(\(([^)]*)\))?!?: *(.*)\|(.*)$/- **\3:** \4 (`\5`)/' \
+              | sed -E 's/^- \*\*:\*\* /- /'
+          }
+
+          section() {
+            local pattern="$1" heading="$2"
+            local entries
+            entries=$(git log --no-merges --pretty='%s|%h' "$RANGE" \
+              | grep -E "^$pattern" \
+              | format_entries \
+              || true)
+            if [ -n "$entries" ]; then
+              printf '### %s\n\n%s\n\n' "$heading" "$entries" >> notes.md
+            fi
+          }
+
+          if [ -z "$LAST_TAG" ]; then
+            {
+              echo "Initial release. Everything below is what the project contains as of this tag."
+              echo
+            } > notes.md
+          else
+            : > notes.md
+          fi
+
+          # Breaking changes first: they are the entries most likely to cost a
+          # reader time if missed.
+          BREAKING=$(git log --no-merges --pretty='%s|%h' "$RANGE" \
+            | grep -E '^[a-z]+(\([^)]*\))?!:' \
+            | format_entries || true)
+          if [ -n "$BREAKING" ]; then
+            printf '### ⚠ Breaking changes\n\n%s\n\n' "$BREAKING" >> notes.md
+          fi
+
+          section 'feat(\([^)]*\))?!?:' 'Features'
+          section 'fix(\([^)]*\))?!?:'  'Bug fixes'
+          section 'perf(\([^)]*\))?!?:' 'Performance'
+          section 'docs(\([^)]*\))?!?:' 'Documentation'
+          section '(ci|build)(\([^)]*\))?!?:' 'CI / build'
+          section '(chore|refactor|test|style)(\([^)]*\))?!?:' 'Maintenance'
+
+          # A release with no recognised entries would otherwise publish an
+          # empty body, which reads like the tooling broke rather than like
+          # the commits were unconventional.
+          if [ ! -s notes.md ] || ! grep -q '^###' notes.md; then
+            printf 'No Conventional Commit subjects found in this range — see the full diff below.\n\n' >> notes.md
+          fi
+
+          if [ -n "$LAST_TAG" ]; then
+            printf -- '---\n\n**Full diff:** https://github.com/%s/compare/%s...v%s\n' \
+              "$GITHUB_REPOSITORY" "$LAST_TAG" "$VERSION" >> notes.md
+          fi
+
+          echo "----- release notes -----"
+          cat notes.md
+
+      - name: Tag and publish
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Re-check under the concurrency lock rather than trusting the
+          # earlier read: if two merges queued, the first may have already
+          # published this exact version, and `gh release create` would fail
+          # the whole run on a duplicate tag.
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "::warning::Tag v$VERSION already exists — another run published it first. Nothing to do."
+            exit 0
+          fi
+
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file notes.md \
+            --target "$GITHUB_SHA"
+
+          echo "Published https://github.com/$GITHUB_REPOSITORY/releases/tag/v$VERSION"
+
+      - name: Explain a skipped release
+        if: steps.version.outputs.release != 'true'
+        run: |
+          echo "No release cut for this push — the commits since the last tag were"
+          echo "docs/ci/chore only, or there were no non-merge commits at all."
+          echo "The next merge carrying a feat/fix will include them in its notes."
