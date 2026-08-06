@@ -251,7 +251,7 @@ nothing enforces it automatically.
 
 ## 8. Backups & Disaster Recovery
 
-- RDS automated backups (7 days)
+- RDS automated backups (1 day — the free-tier maximum, not a design choice; `infra/modules/rds_postgres/main.tf` notes raising it to 7 on a paid account)
 - S3 model bucket has versioning and a 30-day lifecycle
 - Terraform state in S3 with versioning + DynamoDB lock
 - Runbook: full recovery is `terraform apply` + restore latest RDS snapshot + redeploy ECS task
