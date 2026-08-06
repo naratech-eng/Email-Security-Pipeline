@@ -71,6 +71,8 @@ write_files:
       ssl_cert = </etc/pki/postfix/postfix.crt
       ssl_key = </etc/pki/postfix/postfix.key
       ssl_min_protocol = TLSv1.2
+      # PLAIN-only rejects Outlook/365 clients that auth via LOGIN.
+      auth_mechanisms = plain login
 
 runcmd:
   # Rocky's AMI ships neither SSM Agent nor EC2 Instance Connect; install first.
@@ -170,8 +172,16 @@ runcmd:
 
   - useradd -r -s /sbin/nologin filter || true
 
+  # postfix_pipe_t denied write to /etc/esp (etc_t); scoped custom type, not blanket.
+  - aws s3 cp s3://${scripts_bucket}/esp-filter-write.te /tmp/esp_filter_write.te --region us-east-1
+  - checkmodule -M -m -o /tmp/esp_filter_write.mod /tmp/esp_filter_write.te
+  - semodule_package -o /tmp/esp_filter_write.pp -m /tmp/esp_filter_write.mod
+  - semodule -i /tmp/esp_filter_write.pp
+  - semanage fcontext -a -t esp_data_t "/etc/esp(/.*)?"
+
   # Fetch the JWT key once at boot; content_filter reads it from disk.
   - mkdir -p /etc/esp
+  - restorecon -Rv /etc/esp
   - >-
     aws secretsmanager get-secret-value
     --secret-id ${jwt_signing_key_secret_arn}
