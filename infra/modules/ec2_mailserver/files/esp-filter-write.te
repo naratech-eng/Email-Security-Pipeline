@@ -1,0 +1,14 @@
+module esp_filter_write 1.0;
+
+require {
+    type postfix_pipe_t;
+    attribute file_type;
+    class dir { write add_name remove_name };
+    class file { write create unlink open getattr rename };
+}
+
+type esp_data_t;
+typeattribute esp_data_t file_type;
+
+allow postfix_pipe_t esp_data_t:dir { write add_name remove_name };
+allow postfix_pipe_t esp_data_t:file { write create unlink open getattr rename };

@@ -29,9 +29,10 @@ locals {
 # so editing either re-uploads it without forcing an instance replacement.
 locals {
   scripts = {
-    "phishing_filter.py" = { path = "files/phishing_filter.py", content_type = "text/x-python" }
-    "setup-certbot.sh"   = { path = "files/setup-certbot.sh", content_type = "text/x-shellscript" }
-    "setup-mail-auth.sh" = { path = "files/setup-mail-auth.sh", content_type = "text/x-shellscript" }
+    "phishing_filter.py"  = { path = "files/phishing_filter.py", content_type = "text/x-python" }
+    "setup-certbot.sh"    = { path = "files/setup-certbot.sh", content_type = "text/x-shellscript" }
+    "setup-mail-auth.sh"  = { path = "files/setup-mail-auth.sh", content_type = "text/x-shellscript" }
+    "esp-filter-write.te" = { path = "files/esp-filter-write.te", content_type = "text/plain" }
   }
 }
 
