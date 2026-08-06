@@ -71,7 +71,11 @@ write_files:
       ssl_cert = </etc/pki/postfix/postfix.crt
       ssl_key = </etc/pki/postfix/postfix.key
       ssl_min_protocol = TLSv1.2
-      # PLAIN-only rejects Outlook/365 clients that auth via LOGIN.
+
+  # Own file: certbot below overwrites 94-esp-ssl.conf wholesale, which would
+  # wipe this too. PLAIN-only rejects LOGIN auth.
+  - path: /etc/dovecot/conf.d/95-esp-auth-mechanisms.conf
+    content: |
       auth_mechanisms = plain login
 
 runcmd:
@@ -172,7 +176,7 @@ runcmd:
 
   - useradd -r -s /sbin/nologin filter || true
 
-  # postfix_pipe_t denied write to /etc/esp (etc_t); scoped custom type, not blanket.
+  # postfix_pipe_t denied write to /etc/esp (etc_t); scoped type, not blanket.
   - aws s3 cp s3://${scripts_bucket}/esp-filter-write.te /tmp/esp_filter_write.te --region us-east-1
   - checkmodule -M -m -o /tmp/esp_filter_write.mod /tmp/esp_filter_write.te
   - semodule_package -o /tmp/esp_filter_write.pp -m /tmp/esp_filter_write.mod
