@@ -25,8 +25,8 @@ locals {
 
 # Uploaded by Terraform so the instance can fetch these at boot. Both grew too
 # large to embed in user_data (phishing_filter.py first, then the M7-T17
-# certbot logic on top of it) -- etag ties each object to its file's content,
-# so editing either re-uploads it without forcing an instance replacement.
+# certbot logic on top of it) -- source_hash ties each object to its file's
+# content, so editing either re-uploads it without forcing an instance replacement.
 locals {
   scripts = {
     "phishing_filter.py"  = { path = "files/phishing_filter.py", content_type = "text/x-python" }
@@ -39,10 +39,16 @@ locals {
 resource "aws_s3_object" "scripts" {
   for_each = local.scripts
 
-  bucket       = var.scripts_bucket
-  key          = each.key
-  source       = "${path.module}/${each.value.path}"
-  etag         = filemd5("${path.module}/${each.value.path}")
+  bucket = var.scripts_bucket
+  key    = each.key
+  source = "${path.module}/${each.value.path}"
+  # source_hash, not etag: this bucket's default encryption is SSE-KMS, and for
+  # a KMS-encrypted object S3's ETag is not the MD5 of the plaintext. Comparing
+  # it against filemd5() therefore never matches, so every plan reported these
+  # objects as changed and every apply re-uploaded them -- "no changes" was
+  # unreachable, which quietly devalues drift detection as a signal.
+  # source_hash is the provider's supported way to track content under KMS.
+  source_hash  = filemd5("${path.module}/${each.value.path}")
   content_type = each.value.content_type
 }
 
