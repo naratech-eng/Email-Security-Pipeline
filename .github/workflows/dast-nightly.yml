@@ -165,23 +165,34 @@ jobs:
       # redirecting stdout to a .json produced a file with the scan transcript
       # spliced into the middle of the JSON -- jq died with "Invalid numeric
       # literal at line 9, column 2" and the gate below never evaluated a
-      # single finding. Reproduced locally against the real ALB before fixing.
+      # single finding.
+      #
+      # The mount target is a dedicated 0777 directory, NOT $PWD. The
+      # drwetter/testssl.sh image runs as a non-root user whose UID does not
+      # match the runner's, so writing into a $PWD bind mount fails with
+      # "Permission denied" on a Linux runner -- while succeeding on macOS
+      # Docker Desktop, whose VirtioFS/osxfs layer papers over UID mismatches.
+      # That difference is exactly why the first attempt at this fix passed
+      # local verification and still produced three empty files in CI.
+      - name: Prepare a container-writable output directory
+        run: mkdir -p tls-out && chmod 0777 tls-out
+
       - name: Scan public ALB (esp-api.naratech.xyz:443)
         run: |
-          docker run --rm -v "$PWD:/out" drwetter/testssl.sh \
+          docker run --rm -v "$PWD/tls-out:/out" drwetter/testssl.sh \
             --jsonfile-pretty /out/alb-tls.json --quiet esp-api.naratech.xyz:443 || true
 
       # STARTTLS on submission -- testssl.sh needs --starttls to negotiate it
       # instead of expecting TLS from the first byte, or every check no-ops.
       - name: Scan mail server submission (mail.naratech.xyz:587, STARTTLS)
         run: |
-          docker run --rm -v "$PWD:/out" drwetter/testssl.sh \
+          docker run --rm -v "$PWD/tls-out:/out" drwetter/testssl.sh \
             --jsonfile-pretty /out/mail-submission-tls.json --quiet \
             --starttls smtp mail.naratech.xyz:587 || true
 
       - name: Scan mail server IMAPS (mail.naratech.xyz:993)
         run: |
-          docker run --rm -v "$PWD:/out" drwetter/testssl.sh \
+          docker run --rm -v "$PWD/tls-out:/out" drwetter/testssl.sh \
             --jsonfile-pretty /out/mail-imaps-tls.json --quiet \
             mail.naratech.xyz:993 || true
 
@@ -204,9 +215,19 @@ jobs:
           SELECT='.scanResult[] | to_entries[] | .value | arrays[] | select(.severity)'
 
           FAIL=0
-          for f in alb-tls.json mail-submission-tls.json mail-imaps-tls.json; do
+          for f in tls-out/alb-tls.json tls-out/mail-submission-tls.json tls-out/mail-imaps-tls.json; do
+            # A missing or empty report is a FAILURE, not a skip. This branch
+            # used to `continue` with only a ::warning::, so when all three
+            # scans failed to write their output the job still printed
+            # "OK — no HIGH/CRITICAL TLS findings" and went green having
+            # checked precisely nothing. That is strictly worse than the jq
+            # crash it replaced: a crash is visibly broken, whereas a green
+            # gate that inspected zero findings is indistinguishable from a
+            # real pass. Caught only by reading the run log line by line
+            # rather than trusting the check mark.
             if [ ! -s "$f" ]; then
-              echo "::warning::$f is empty — that scan didn't produce output (target unreachable or docker pull failed), skipping its gate."
+              echo "::error::$f is missing or empty — the scan produced no report, so this gate proved nothing. Treating as a failure rather than a pass."
+              FAIL=1
               continue
             fi
             # Explicit validity check: an unparseable file used to crash jq
@@ -234,7 +255,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: testssl-reports
-          path: "*-tls.json"
+          path: "tls-out/*-tls.json"
           retention-days: 14
 
   # M9-T5 / SEC-01,02 (docs/m7-t4-t6-mail-filter-testing.md) — automates the
