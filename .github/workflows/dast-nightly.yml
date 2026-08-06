@@ -160,22 +160,30 @@ jobs:
     name: testssl.sh — ALB + mail server
     runs-on: ubuntu-latest
     steps:
+      # --jsonfile-pretty writes to a bind-mounted FILE, not /dev/stdout.
+      # testssl.sh writes its human-readable progress to stdout as well, so
+      # redirecting stdout to a .json produced a file with the scan transcript
+      # spliced into the middle of the JSON -- jq died with "Invalid numeric
+      # literal at line 9, column 2" and the gate below never evaluated a
+      # single finding. Reproduced locally against the real ALB before fixing.
       - name: Scan public ALB (esp-api.naratech.xyz:443)
         run: |
-          docker run --rm drwetter/testssl.sh --jsonfile-pretty /dev/stdout --quiet \
-            esp-api.naratech.xyz:443 > alb-tls.json || true
+          docker run --rm -v "$PWD:/out" drwetter/testssl.sh \
+            --jsonfile-pretty /out/alb-tls.json --quiet esp-api.naratech.xyz:443 || true
 
       # STARTTLS on submission -- testssl.sh needs --starttls to negotiate it
       # instead of expecting TLS from the first byte, or every check no-ops.
       - name: Scan mail server submission (mail.naratech.xyz:587, STARTTLS)
         run: |
-          docker run --rm drwetter/testssl.sh --jsonfile-pretty /dev/stdout --quiet \
-            --starttls smtp mail.naratech.xyz:587 > mail-submission-tls.json || true
+          docker run --rm -v "$PWD:/out" drwetter/testssl.sh \
+            --jsonfile-pretty /out/mail-submission-tls.json --quiet \
+            --starttls smtp mail.naratech.xyz:587 || true
 
       - name: Scan mail server IMAPS (mail.naratech.xyz:993)
         run: |
-          docker run --rm drwetter/testssl.sh --jsonfile-pretty /dev/stdout --quiet \
-            mail.naratech.xyz:993 > mail-imaps-tls.json || true
+          docker run --rm -v "$PWD:/out" drwetter/testssl.sh \
+            --jsonfile-pretty /out/mail-imaps-tls.json --quiet \
+            mail.naratech.xyz:993 || true
 
       # testssl.sh severities: OK/INFO/LOW/MEDIUM/HIGH/CRITICAL. Gate on
       # HIGH/CRITICAL only, matching the ZAP gate's High-only threshold
@@ -186,15 +194,33 @@ jobs:
       # ignorable on day one.
       - name: Gate on HIGH/CRITICAL findings
         run: |
+          # Findings are nested: scanResult[] is one object per scanned IP,
+          # whose values are arrays of findings grouped by category
+          # (vulnerabilities, ciphers, protocols, ...). The previous `.[]`
+          # iterated the TOP-LEVEL keys (Invocation, version, ...) instead,
+          # so even valid JSON would never have matched a finding. Verified
+          # against a real scan: this selector returns 326 findings whose
+          # severity counts match a raw grep of the same file exactly.
+          SELECT='.scanResult[] | to_entries[] | .value | arrays[] | select(.severity)'
+
           FAIL=0
           for f in alb-tls.json mail-submission-tls.json mail-imaps-tls.json; do
             if [ ! -s "$f" ]; then
               echo "::warning::$f is empty — that scan didn't produce output (target unreachable or docker pull failed), skipping its gate."
               continue
             fi
-            COUNT=$(jq '[.[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' "$f")
+            # Explicit validity check: an unparseable file used to crash jq
+            # mid-loop and fail the job with a parse error that read like a
+            # TLS problem. A scan we cannot read is a broken gate, not a
+            # clean result, so say so plainly and fail on it.
+            if ! jq -e . "$f" >/dev/null 2>&1; then
+              echo "::error::$f is not valid JSON — the scan or its output path is broken, so this gate proved nothing."
+              FAIL=1
+              continue
+            fi
+            COUNT=$(jq "[$SELECT | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" "$f")
             echo "$f — HIGH/CRITICAL findings: $COUNT"
-            jq -r '.[] | select(.severity == "HIGH" or .severity == "CRITICAL") | "  [\(.severity)] \(.id): \(.finding)"' "$f" || true
+            jq -r "$SELECT | select(.severity == \"HIGH\" or .severity == \"CRITICAL\") | \"  [\(.severity)] \(.id): \(.finding)\"" "$f" || true
             if [ "$COUNT" -gt 0 ]; then FAIL=1; fi
           done
           if [ "$FAIL" -eq 1 ]; then
@@ -275,35 +301,80 @@ jobs:
             exit 1
           fi
 
-      # M9-T0 verification — confirm the inbound message just delivered
-      # actually carries Received-SPF / Authentication-Results, i.e. the
+      # The annotation check MUST use port 25, not submission. Submission
+      # deliberately disables the milters (`-o smtpd_milters=` in master.cf)
+      # and swaps in its own recipient restrictions, because SPF/DKIM/DMARC
+      # validate INBOUND mail from strangers -- running them against our own
+      # already-authenticated users' outbound mail would prove nothing.
+      #
+      # The first version of this test checked the message Test 3 sent over
+      # 587 and therefore asserted a header that is correctly never present
+      # there. It failed on its first ever nightly execution (2026-08-06);
+      # the four green nights before that predate the test existing at all,
+      # so this assertion has never actually passed.
+      #
+      # Local recipient on :25 is accepted rather than relayed:
+      # reject_unauth_destination only refuses NON-local destinations, and
+      # testuser2@mail.naratech.xyz is in mydestination.
+      - name: "Test 4a — deliver an inbound message over :25 (the path milters run on)"
+        run: |
+          set +e
+          TOKEN="dast-inbound-$(date -u +%s)"
+          echo "MAIL_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          OUT=$(swaks --to testuser2@mail.naratech.xyz --from testuser1@mail.naratech.xyz \
+            --server mail.naratech.xyz --port 25 \
+            --header "Subject: $TOKEN" --body "inbound annotation check" 2>&1)
+          echo "$OUT"
+          if echo "$OUT" | grep -q "250 2.0.0 Ok"; then
+            echo "OK — inbound message accepted for local delivery as $TOKEN."
+          else
+            echo "::error::Inbound delivery on :25 to a local mailbox failed — cannot verify annotation headers."
+            exit 1
+          fi
+
+      # M9-T0 verification — confirm the message just delivered actually
+      # carries Received-SPF / Authentication-Results, i.e. the
       # opendkim/opendmarc/policyd-spf pipeline is live end-to-end, not just
-      # present in Terraform. Python's imaplib over 993 (self-signed cert,
-      # hence no cert verification) rather than another CLI dependency.
-      - name: "Test 4 — inbound mail carries SPF/DKIM/DMARC annotation headers"
+      # present in Terraform. Python's imaplib over 993 rather than another
+      # CLI dependency.
+      - name: "Test 4b — that message carries SPF/DKIM/DMARC annotation headers"
         run: |
           python3 - <<'PYEOF'
-          import imaplib, ssl, sys, time
+          import imaplib, os, ssl, sys, time
+
+          token = os.environ["MAIL_TOKEN"]
 
           ctx = ssl.create_default_context()
           ctx.check_hostname = False
           ctx.verify_mode = ssl.CERT_NONE
 
-          time.sleep(5)  # let the message just sent by Test 3 land
           m = imaplib.IMAP4_SSL("mail.naratech.xyz", 993, ssl_context=ctx)
           m.login("testuser2", "ChangeMe123!")
           m.select("INBOX")
-          typ, data = m.search(None, "ALL")
-          ids = data[0].split()
+
+          # Match on our own token instead of "newest message in the box":
+          # the mailbox is shared with every other test and prior run, so
+          # indexing the last message races with anything else delivering.
+          ids = []
+          for _ in range(10):
+              typ, data = m.search(None, 'SUBJECT', token)
+              ids = data[0].split()
+              if ids:
+                  break
+              time.sleep(3)  # content_filter + LMTP delivery is not instant
+
           if not ids:
-              print("::error::No messages in testuser2's INBOX to check.")
+              print(f"::error::Message '{token}' never arrived in testuser2's INBOX after 30s.")
+              m.logout()
               sys.exit(1)
+
           typ, msg = m.fetch(ids[-1], "(BODY[HEADER])")
           headers = msg[0][1].decode("utf-8", errors="replace")
           print(headers)
           has_spf = "Received-SPF" in headers or "Authentication-Results" in headers
           has_verdict = "X-Phishing-Verdict" in headers
           m.logout()
+
           if not has_spf:
               print("::error::No Received-SPF/Authentication-Results header — M9-T0's inbound SPF/DKIM/DMARC pipeline isn't annotating mail.")
               sys.exit(1)
