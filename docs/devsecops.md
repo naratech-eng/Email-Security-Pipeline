@@ -177,7 +177,7 @@ Also closed in the same pass: **~20 GitHub Actions pinned to commit SHA** (`S763
 | `dev-<name>` | none | personal working branches (`dev-nara`, `dev-michael`, …); same PR checks apply |
 | `dev` | dev | `terraform apply` + backend ECS deploy run automatically on merge |
 | `naratech` | prod (demo) | main branch; frontend-only promotion — see below |
-| tagged release `v*` | prod (demo) | git tag created manually after a naratech merge (§4.2) |
+| tagged release `v*` | prod (demo) | tag + GitHub Release created automatically on merge to naratech (§4.2) |
 
 Flow: `feature/… / dev-<name> → dev → naratech`
 
@@ -207,19 +207,47 @@ past the capstone if this becomes a real deployment.
 
 ### 4.2 Creating a release
 
-After merging a PR into `naratech`:
+Automatic. `.github/workflows/release.yml` runs on every push to `naratech`
+and, if the commits since the last tag warrant it, creates the tag and
+publishes a GitHub Release with generated notes. Nothing to run by hand.
+
+The version is derived from Conventional Commit subjects since the previous
+tag — there is no `VERSION` file, so the tag cannot drift out of sync with
+the source:
+
+| Commits since last tag | Bump |
+|---|---|
+| `feat!:` / `BREAKING CHANGE:` in body | major — but see the 0.x rule below |
+| `feat:` | minor |
+| `fix:` / `perf:` | patch |
+| only `docs`/`ci`/`chore`/`refactor`/`test`/`style` | **no release** |
+
+Two deliberate behaviours worth knowing:
+
+- **Non-releasable merges don't mint a version.** A docs-only merge would
+  otherwise publish a release whose notes say nothing happened. Those commits
+  are not lost — they appear in the notes of the next release that does carry
+  a `feat`/`fix`.
+- **While on `0.x`, a breaking change bumps the minor, not the major.**
+  Otherwise the first `feat!:` would silently ship `1.0.0`, and declaring the
+  project stable should be a deliberate decision rather than a side effect of
+  commit syntax. Cut `1.0.0` by tagging it by hand once; the workflow takes
+  over from there.
+
+The changelog lives in the Release body rather than a committed
+`CHANGELOG.md`: `naratech` has branch protection with required status checks,
+so a CI push of a changelog commit would need that protection bypassed. Tags
+and Releases aren't covered by branch protection, so this path needs no
+exception — and the Release body is what actually renders on the repo's
+Releases page.
+
+To cut a release manually anyway (e.g. the first `1.0.0`):
 
 ```bash
 git checkout naratech && git pull
-git tag -a v1.1.0 -m "v1.1.0"
-git push origin v1.1.0
-gh release create v1.1.0 --title "v1.1.0" --generate-notes
+git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0
+gh release create v1.0.0 --title "v1.0.0" --generate-notes
 ```
-
-Version numbers are chosen and applied manually — no automated
-semantic-release. Bump the minor version for a feature merge, the patch
-version for a fix-only merge, matching conventional-commit intent even though
-nothing enforces it automatically.
 
 ## 5. Secrets & Identity
 
