@@ -1,14 +1,31 @@
+# M9: /etc/esp gets its own SELinux type so the phishing filter (running under
+# the confined postfix_pipe_t domain via Postfix's pipe transport) can read its
+# config and maintain the M7-T16 circuit-breaker state file.
+#
+# Scoped to postfix_pipe_t deliberately: the alternative -- allowing writes to
+# the generic etc_t label -- would let every confined service on the box write
+# anywhere under /etc.
+#
+# A fresh type starts with NO inherited permissions, so read access that came
+# free from etc_t's default rules has to be granted explicitly too. Every
+# permission below was confirmed necessary from a real `ausearch -m avc` denial
+# while a message flowed through the filter, not guessed:
+#   dir search/read/getattr  - open any file under /etc/esp at all
+#   dir write/add_name/remove_name, file create/unlink/rename
+#                            - the lock + write-temp-then-rename in circuit_record()
+#   file lock                - fcntl.flock() on the .lock file
+#   file ioctl               - Python's io layer issues TCGETS (0x5401) on open()
 module esp_filter_write 1.0;
 
 require {
     type postfix_pipe_t;
     attribute file_type;
-    class dir { write add_name remove_name };
-    class file { write create unlink open getattr rename };
+    class dir { search read getattr write add_name remove_name };
+    class file { read write create unlink open getattr rename lock append ioctl };
 }
 
 type esp_data_t;
 typeattribute esp_data_t file_type;
 
-allow postfix_pipe_t esp_data_t:dir { write add_name remove_name };
-allow postfix_pipe_t esp_data_t:file { write create unlink open getattr rename };
+allow postfix_pipe_t esp_data_t:dir { search read getattr write add_name remove_name };
+allow postfix_pipe_t esp_data_t:file { read write create unlink open getattr rename lock append ioctl };
