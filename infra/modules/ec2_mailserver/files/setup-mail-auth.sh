@@ -16,6 +16,12 @@
 # Usage: setup-mail-auth.sh <mail_hostname>
 MAIL_HOSTNAME="$1"
 
+# opendkim/opendmarc pull in libmilter (sendmail-milter) and libmemcached,
+# which live in CRB (disabled by default on Rocky 9) -- without this the
+# install fails on unresolved deps and every message goes out unauthenticated,
+# with no error surfaced anywhere except this script's own fallback message.
+dnf config-manager --set-enabled crb || true
+
 dnf install -y opendkim opendmarc pypolicyd-spf || {
   echo "setup-mail-auth.sh: package install failed, leaving mail unauthenticated"
   exit 0
