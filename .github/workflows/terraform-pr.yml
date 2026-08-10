@@ -27,7 +27,7 @@ jobs:
       # v4 is the same action on the node24 runtime. v3 is node20, which GitHub
       # deprecated and now force-runs on node24 regardless. v4.0.0 changed
       # nothing but the runtime, so these filters are unaffected.
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
           filters: |
