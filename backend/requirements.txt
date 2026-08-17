@@ -25,7 +25,7 @@ boto3==1.43.64
 pyjwt[crypto]==2.13.0    # M7-T14 — verify Cognito access-token JWTs against JWKS
 python-multipart==0.0.32 # required by FastAPI for Form/File (/analyze/email upload)
 psycopg[binary]==3.3.4   # M7-T15 detections store (RDS Postgres)
-alembic==1.19.0          # M7-T15 schema migrations
+alembic==1.19.1          # M7-T15 schema migrations
 sqlalchemy==2.0.51       # alembic dependency (migrations use plain SQL, not the ORM)
 joblib==1.5.3
 scikit-learn==1.9.0
