@@ -30,7 +30,7 @@ sqlalchemy==2.0.51       # alembic dependency (migrations use plain SQL, not the
 joblib==1.5.3
 scikit-learn==1.9.0
 pandas==3.0.5
-numpy==2.5.1
+numpy==2.5.2
 
 # url_charcnn (M6-T3) is the primary URL model (F1 0.9755, ~1MB on disk).
 # URLPredictor falls back to the Random Forest (url_rf, F1 0.866) only if
