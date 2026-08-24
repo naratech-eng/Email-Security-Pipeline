@@ -3,8 +3,8 @@ output "instance_id" {
 }
 
 output "public_ip" {
-  value       = aws_instance.mail.public_ip
-  description = "Auto-assigned public IP — note this changes on stop/start"
+  value       = aws_eip.mail.public_ip
+  description = "Elastic IP — stable across stop/start"
 }
 
 output "private_ip" {
