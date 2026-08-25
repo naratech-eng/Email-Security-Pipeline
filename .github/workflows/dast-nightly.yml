@@ -96,7 +96,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Schemathesis
-        run: pip install schemathesis==4.24.3
+        # jsonschema-rs is a transitive dep and was previously unpinned. 0.51.0
+        # renamed CanonicalSchema.is_satisfiable() to .satisfiability, which
+        # schemathesis 4.24.3 still called -- every fuzz run died with
+        # `AttributeError: 'builtins.CanonicalSchema' object has no attribute
+        # 'is_satisfiable'` and took the promotion gate down with it. 4.25.2
+        # drops that call; jsonschema-rs is pinned too so the next breaking
+        # release of a dep we don't name can't silently repeat this.
+        run: pip install schemathesis==4.25.2 jsonschema-rs==0.51.0
 
 # Checks are chosen deliberately, NOT `all`. The first real run showed `all`
       # blocks on two non-security classes:
