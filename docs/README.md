@@ -4,7 +4,7 @@
 
 ## What this project is
 
-Phishing remains one of the most common entry points for serious security incidents. This capstone delivers an end-to-end system that:
+Phishing remains one of the most common entry points for serious security incidents. This project delivers an end-to-end system that:
 
 1. Lets a security operator **upload or paste an email** in a web dashboard and immediately see a phishing verdict, score, and feature breakdown.
 2. Receives real mail through a self-hosted **Postfix + Dovecot** stack on **Rocky Linux 9 (EC2)** and scores every message before delivery.
@@ -56,6 +56,6 @@ This is a **one-time step per clone** and it is not optional in spirit: the hook
 
 - [Notion workspace](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3)
 
-## Course context
+## Milestones
 
-CYT300 Capstone — deliverables are split into 10 milestones across a Research phase and a Deployment phase. See the [Roadmap](roadmap.md) for the milestone-to-week mapping.
+Work is split into 10 milestones across a Research phase and a Deployment phase. See the [Roadmap](roadmap.md) for the milestone-to-week mapping.

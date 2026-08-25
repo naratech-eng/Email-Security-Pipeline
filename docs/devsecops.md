@@ -1,6 +1,6 @@
 # DevSecOps
 
-This page describes how security and reliability are baked into the SDLC for the Email Security Pipeline. It satisfies the DevSecOps expectation called out in `milestone-guide.md` (Milestone 4 onwards) and supports Milestones 8, 9, and 10.
+This page describes how security and reliability are baked into the SDLC for the Email Security Pipeline. DevSecOps practice starts at Milestone 4 and is extended through Milestones 8, 9, and 10.
 
 ## 1. Principles
 
@@ -167,7 +167,7 @@ Also closed in the same pass: **~20 GitHub Actions pinned to commit SHA** (`S763
 
 **Gap 4 — no SBOM.** Nothing produces a software bill of materials, so "are we affected by CVE-X?" is answered by re-scanning rather than by querying a known inventory. Trivy can emit CycloneDX/SPDX at build time for near-zero extra effort. Still open.
 
-**Not gaps, deliberately:** no signed commits, no artifact signing/provenance (SLSA), no runtime IDS/eBPF monitoring, no chaos/fault injection. All are real production practices and all are disproportionate for a capstone on a lab account — noted here so their absence reads as a decision rather than an oversight.
+**Not gaps, deliberately:** no signed commits, no artifact signing/provenance (SLSA), no runtime IDS/eBPF monitoring, no chaos/fault injection. All are real production practices and all are disproportionate for a lab account — noted here so their absence reads as a decision rather than an oversight.
 
 ## 4. Branching & Environments
 
@@ -203,7 +203,7 @@ for a PR check, and DAST needs a live target that doesn't exist per-PR).
 A genuinely separate prod backend (its own ECS/RDS/mail server/Cognito pool)
 was considered and deliberately deferred — real infra cost roughly doubles,
 and a second mail server means a second DNS/SES/cert setup. Worth revisiting
-past the capstone if this becomes a real deployment.
+if this becomes a real deployment.
 
 ### 4.2 Creating a release
 
@@ -290,4 +290,4 @@ Lives in [Notion workspace](https://www.notion.so/361ee3d2d2cf811890e3c6ea307645
 
 ## 10. Compliance Posture
 
-For the capstone we treat compliance as documentation. Production deployment of this system would also need to consider GDPR, PIPEDA, and any sector-specific email handling rules — captured in the threat model.
+For now we treat compliance as documentation. Production deployment of this system would also need to consider GDPR, PIPEDA, and any sector-specific email handling rules — captured in the threat model.

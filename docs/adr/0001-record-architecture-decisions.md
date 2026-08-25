@@ -5,7 +5,7 @@
 
 ## Context
 
-Capstone projects span many small but important decisions (stack choices, model strategy, deployment shape). Without a record, these decisions are lost in chat and presentations and become hard to defend during the final review.
+This project spans many small but important decisions (stack choices, model strategy, deployment shape). Without a record, these decisions are lost in chat and become hard to revisit or justify later.
 
 ## Decision
 

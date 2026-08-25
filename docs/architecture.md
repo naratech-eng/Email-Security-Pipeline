@@ -300,7 +300,7 @@ See the full [Threat Model](threat-model.md). High-level controls in the AWS top
 
 ## 13. Scalability Notes
 
-The capstone targets light load. The architecture scales linearly:
+The system targets light load. The architecture scales linearly:
 - ECS Fargate auto-scales on CPU/requests
 - Move RDS to Multi-AZ + read replica for traffic spikes
 - Cache URL scores in ElastiCache (Redis) if the same URLs repeat

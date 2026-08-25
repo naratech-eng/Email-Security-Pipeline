@@ -27,7 +27,7 @@ Verified directly against the schema (`backend/migrations/versions/28d446b7b47d_
 **180 days.** Rationale:
 - Long enough to support the dashboard's trend/history views and any post-incident review of a flagged sender.
 - Short enough that indefinite accumulation of subject lines + addresses (personal data under most definitions, including GDPR's) doesn't become an open-ended liability with no operational purpose past a few months.
-- Matches this being a capstone lab handling no regulated real-user data (§4) — a production deployment handling real mail would need a documented business/legal justification for whatever period is chosen, not just "180 felt reasonable."
+- Matches this being a lab deployment handling no regulated real-user data (§4) — a production deployment handling real mail would need a documented business/legal justification for whatever period is chosen, not just "180 felt reasonable."
 
 Configurable via `retention_days` on the `ecs_service` Terraform module (default 180) — not hardcoded, so a real deployment can tune it without a code change.
 
@@ -45,7 +45,7 @@ Design notes:
 - Runs in the private subnets, same security group as the API — no new network exposure.
 - Reuses the API's task role rather than a minimal purpose-built one (documented simplification in the Terraform comment) — acceptable for a scheduled job with no internet exposure and no untrusted input, not a real credential-exfiltration path, but a genuine least-privilege deployment would scope this tighter.
 
-## 4. Legal/compliance posture (capstone scope)
+## 4. Legal/compliance posture (current scope)
 
 Per `docs/threat-model.md` §5:
 - This system does not process regulated personal data of real users. Datasets are public, used for academic purposes.

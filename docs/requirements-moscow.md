@@ -7,7 +7,7 @@ Prioritization framework for the Email Security Pipeline. Each requirement is ma
 | **Must** | Required for the project to be considered successful at the final demo. Non-negotiable. |
 | **Should** | Important and expected, but the project still passes without them if blocked. |
 | **Could** | Nice to have. Adds polish or stretch capability. |
-| **Won't (this release)** | Explicitly out of scope for this capstone. May appear in a future iteration. |
+| **Won't (this release)** | Explicitly out of scope for this release. May appear in a future iteration. |
 
 ---
 
@@ -30,7 +30,7 @@ Prioritization framework for the Email Security Pipeline. Each requirement is ma
 | M-13 | Mail server hardening: restricted relay, SPF/DKIM/DMARC validation in path, security groups least-privilege | M9 |
 | M-14 | GitHub Actions CI/CD: lint, test, Trivy on container, tfsec + Checkov on Terraform; required to merge to `main` | Cross |
 | M-15 | End-to-end demo on AWS with metrics captured | M10 |
-| M-16 | Final report and presentation aligned with milestone-guide deliverables | M10 |
+| M-16 | Complete project documentation: architecture, security posture, and runbooks | M10 |
 
 ## Should Have
 
@@ -64,7 +64,7 @@ Prioritization framework for the Email Security Pipeline. Each requirement is ma
 
 | ID | Requirement | Reason |
 |---|---|---|
-| W-01 | Attachment sandboxing / static analysis | Out of capstone scope |
+| W-01 | Attachment sandboxing / static analysis | Out of scope |
 | W-02 | Multi-tenant or production SaaS deployment | Out of scope |
 | W-03 | Outbound DLP filtering | Out of scope |
 | W-04 | Mobile client or full webmail UI | Not needed for demo |

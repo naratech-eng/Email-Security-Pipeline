@@ -67,7 +67,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "security_logs" {
   }
 
   # Trail/Config history has real, ongoing evidentiary value but not forever
-  # at full price on a capstone budget — age out to Glacier rather than
+  # at full price on a small budget — age out to Glacier rather than
   # deleting outright.
   rule {
     id     = "transition-old-logs"

@@ -5,7 +5,7 @@
 
 ## Context
 
-We need a deployment that is reproducible, cost-aware, and secure enough for a public capstone demo. The system has three main runtime parts: the dashboard (web), the inference API (containerized Python), and the mail server (system services).
+We need a deployment that is reproducible, cost-aware, and secure enough for a public demo. The system has three main runtime parts: the dashboard (web), the inference API (containerized Python), and the mail server (system services).
 
 ## Decision
 
@@ -27,7 +27,7 @@ The two clients (dashboard and milter) call the same FastAPI service. Internal t
 ## Why these choices
 
 - **Fargate** keeps ops minimal and scales naturally with the dashboard's traffic.
-- **EC2 for the mail server** is necessary because Postfix needs port 25 and persistent state. Containerizing Postfix is possible but adds complexity for no capstone benefit.
+- **EC2 for the mail server** is necessary because Postfix needs port 25 and persistent state. Containerizing Postfix is possible but adds complexity for no practical benefit.
 - **RDS over self-hosted Postgres** removes maintenance burden.
 - **Single account + single region** keeps the surface small, fits the team size, and is cheaper.
 - **Amplify** removes the need to maintain CloudFront + S3 + CI for the static site.

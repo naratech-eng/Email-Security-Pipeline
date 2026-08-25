@@ -1,6 +1,6 @@
 # Email Security Pipeline — Analyst Dashboard
 
-Production React SPA (the analyst-facing view of the CYT300 phishing-detection pipeline).
+Production React SPA (the analyst-facing view of the phishing-detection pipeline).
 Built with Vite + TypeScript (strict), Tailwind CSS v4, shadcn/ui, react-router, AWS Amplify
 (Cognito auth), Recharts, lucide-react, and Framer Motion.
 
