@@ -318,7 +318,7 @@ These do **not** exist yet. Build the UI against them; degrade gracefully on 404
 
 ## Context for the builder (why this app exists)
 
-CYT300 capstone: an AI phishing-detection pipeline. A Postfix/Dovecot mail server
+An AI phishing-detection pipeline. A Postfix/Dovecot mail server
 scores every inbound email via ML models (LinearSVC email classifier + Char-CNN URL
 classifier) behind a FastAPI service on ECS Fargate; verdicts tag headers, Sieve
 quarantines, and every scored message is persisted to RDS Postgres as a "detection"

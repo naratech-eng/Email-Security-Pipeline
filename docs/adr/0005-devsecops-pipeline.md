@@ -5,7 +5,7 @@
 
 ## Context
 
-The capstone milestone guide highlights DevSecOps, application threat modeling, and risk management as expected outcomes. We must show those practices in our own SDLC, not just in the product features.
+DevSecOps, application threat modeling, and risk management are core goals for this project. Those practices should be visible in our own SDLC, not just in the product features.
 
 ## Decision
 

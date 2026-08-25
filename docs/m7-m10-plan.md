@@ -72,12 +72,12 @@ Plan for the remaining milestones, mapped to the [PRD](prd.md) goals and [MoSCoW
 
 ## M10 — Deployment & Evaluation (Weeks 8–9)
 
-**Goal:** full demo on AWS with captured metrics; final report + presentation.
+**Goal:** full demo on AWS with captured metrics and complete project documentation.
 **MoSCoW:** Must M-15, M-16.
 
 - **M10-T1** Full end-to-end demo on AWS (server flag/quarantine + dashboard upload), metrics captured (Sanjeewa) — *M-15*
-- **M10-T2** Final report aligned with milestone-guide deliverables (Isaiah) — *M-16*
-- **M10-T3** Final presentation + demo deck (John) — *M-16*
+- **M10-T2** Documentation pass: architecture, security posture, and runbooks (Isaiah) — *M-16*
+- **M10-T3** End-to-end demo walkthrough documentation (John) — *M-16*
 - **M10-T4** Reproducibility: `terraform apply` from scratch + `destroy` teardown for cost control (Klara) — *G6*
 
 ---

@@ -22,7 +22,7 @@ URL: https://www.kaggle.com/datasets/naserabdullahalam/phishing-email-dataset
 
 ### 2.2 Why This Dataset
 
-This dataset is a **combined corpus** of several well-known public phishing email sources (Nazario Phishing Corpus, Enron, SpamAssassin, Nigerian Fraud, CEAS, and TREC). It already merges, cleans, and labels them, which removes a large amount of preprocessing work. For a capstone with a tight schedule, that matters.
+This dataset is a **combined corpus** of several well-known public phishing email sources (Nazario Phishing Corpus, Enron, SpamAssassin, Nigerian Fraud, CEAS, and TREC). It already merges, cleans, and labels them, which removes a large amount of preprocessing work. On a tight schedule, that matters.
 
 Key reasons:
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with concrete deliverables, owners, and exit criteria.
+This roadmap aligns the 10 project milestones with concrete deliverables, owners, and exit criteria.
 
 ## Phase Overview
 
@@ -12,11 +12,11 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
 ## Milestone Plan
 
 ### M1 — Understanding Phishing Threats ✅ Complete
-- Deliverables: Research presentation, no formal report required
+- Deliverables: Threat research write-up
 - Exit: Team can describe phishing types, URL tactics, and detection approaches confidently
 
 ### M2 — Dataset Collection ✅ Complete
-- Deliverables: Datasets imported, dataset README, presentation + report
+- Deliverables: Datasets imported, dataset README
 - Exit: At least one phishing email dataset, one URL dataset, one clean email dataset are versioned and documented
 - **Outcome:** phishing-email dataset (~82.5k rows) and malicious-URL dataset (~651k) imported to S3 and documented; see [Dataset EDA](datasets/eda.md).
 
@@ -36,7 +36,7 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
 - **Outcome:** reproducible pipeline produced the email feature matrix (82,078 rows) and 11-feature URL matrix (641,119 rows), exported as stratified train/test splits. See the [Feature Matrix](data/feature-matrix.md).
 
 ### M5 — ML Model Selection ✅ Complete
-- Deliverables: Model comparison table, selection rationale, presentation + report
+- Deliverables: Model comparison table, selection rationale
 - Exit: A primary model is selected with clear justification
 - **Outcome:** benchmarked 11 models across both tracks via a shared harness. Selected
   **LinearSVC** for email (F1 ≈ 0.99) and a **character-level CNN** for URLs (F1 ≈ 0.97), with
@@ -65,7 +65,7 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
 - Exit: All "Must" controls in `docs/threat-model.md` are implemented and documented
 
 ### M10 — Deployment & Evaluation
-- Deliverables: Final demo, final report, final presentation
+- Deliverables: Full end-to-end demo on AWS with captured metrics
 - Exit: Project meets PRD success metrics or documents gap with mitigation plan
 
 ## Suggested Weekly Cadence
@@ -79,7 +79,7 @@ This roadmap aligns the 10 capstone milestones (see `milestone-guide.md`) with c
 | 5–6 | M7 Phase B | Postfix `content_filter` integrated; detections from both modes flow to RDS + dashboard |
 | 6–7 | M8 | Tune model, add trend charts, CI security gates active |
 | 7–8 | M9 | WAF, Cognito, hardening, threat model verification |
-| 8–9 | M10 | Final demo on AWS, report, presentation |
+| 8–9 | M10 | Final demo on AWS, metrics captured |
 
 ## Parallel Tracks
 
