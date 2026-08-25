@@ -3,20 +3,31 @@
 > AI-powered phishing email and malicious URL classifier, running end-to-end on AWS.
 > Two ways to score mail — an analyst dashboard and a live Postfix/Dovecot mail server — sharing one FastAPI inference service, with every piece provisioned by Terraform.
 
-[![Terraform Apply](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/terraform-apply.yml/badge.svg)](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/terraform-apply.yml)
-[![Backend Tests](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/backend-tests.yml)
-[![SAST + Dependency Scan](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/sast.yml/badge.svg)](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/sast.yml)
-[![DAST Nightly](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/dast-nightly.yml/badge.svg)](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/dast-nightly.yml)
-[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=naratech-eng_Email-Security-Pipeline&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=naratech-eng_Email-Security-Pipeline)
+<div align="center">
 
-[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org/)
-[![Terraform](https://img.shields.io/badge/Terraform-1.10-7B42BC?logo=terraform&logoColor=white)](https://www.terraform.io/)
-[![AWS](https://img.shields.io/badge/AWS-ECS%20%7C%20RDS%20%7C%20Amplify-232F3E?logo=amazonwebservices&logoColor=white)](https://aws.amazon.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-ECS%20Fargate-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/) [![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org/) [![Terraform](https://img.shields.io/badge/Terraform-1.10-7B42BC?logo=terraform&logoColor=white)](https://www.terraform.io/) [![AWS](https://img.shields.io/badge/AWS-ECS%20%7C%20RDS%20%7C%20Amplify-232F3E?logo=amazonwebservices&logoColor=white)](https://aws.amazon.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Docker](https://img.shields.io/badge/Docker-ECS%20Fargate-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+</div>
+
+<div align="center">
+
+[![Terraform Apply](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/terraform-apply.yml/badge.svg)](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/terraform-apply.yml) [![SAST + Dependency Scan](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/sast.yml/badge.svg)](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/sast.yml)
+[![DAST Nightly](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/dast-nightly.yml/badge.svg)](https://github.com/naratech-eng/Email-Security-Pipeline/actions/workflows/dast-nightly.yml) [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=naratech-eng_Email-Security-Pipeline&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=naratech-eng_Email-Security-Pipeline)
+
+</div>
+
+<div align="center">
+
+### 🔗 Live demo
+
+**[esp.naratech.xyz](https://esp.naratech.xyz)** · API health: **[esp-api.naratech.xyz/health](https://esp-api.naratech.xyz/health)**
+
+</div>
+
+> [!IMPORTANT]
+> **The live environment is scheduled to come down on 1 September 2026.**
+> It runs on a personal AWS account at roughly **$36/week** at list price, which isn't worth keeping online indefinitely for a demo. After that date the links above stop resolving — everything else in this README still applies.
+>
+> The stack is fully reproducible: `terraform apply` from [`infra/envs/dev`](infra/envs/dev) rebuilds all 165 resources from scratch, and [`docs/runbook-destroy-rebuild.md`](docs/runbook-destroy-rebuild.md) documents the teardown and rebuild path.
 
 ---
 
@@ -90,12 +101,76 @@ See [DevSecOps](docs/devsecops.md) and [Threat Model](docs/threat-model.md).
 
 ## Tech stack
 
-**Backend** FastAPI · Python 3.13 · scikit-learn · psycopg 3 · Alembic
-**Frontend** React 19 · Vite 8 · Tailwind · AWS Amplify Hosting
-**Data** PostgreSQL 16 (RDS) · S3 (datasets, models, logs)
-**Infra** Terraform 1.10 · ECS Fargate · ALB · Cognito · Route53 · ACM · KMS · Secrets Manager
-**Mail** Postfix · Dovecot · OpenDKIM · OpenDMARC · policyd-spf · Amazon SES
-**CI/CD** GitHub Actions with OIDC (no long-lived AWS keys)
+**Backend** : [FastAPI](https://fastapi.tiangolo.com/) · [Python 3.13](https://www.python.org/) · [scikit-learn](https://scikit-learn.org/) · [psycopg 3](https://www.psycopg.org/) · [Alembic](https://alembic.sqlalchemy.org/)
+**Frontend** : [React 19](https://react.dev/) · [Vite 8](https://vitejs.dev/) · [Tailwind](https://tailwindcss.com/) · [AWS Amplify Hosting](https://aws.amazon.com/amplify/)
+**Data** : [PostgreSQL 16](https://www.postgresql.org/) (RDS) · [S3](https://aws.amazon.com/s3/) (datasets, models, logs)
+**Infra** : [Terraform 1.10](https://www.terraform.io/) · [ECS Fargate](https://aws.amazon.com/ecs/fargate/) · [ALB](https://aws.amazon.com/elasticloadbalancing/) · [Cognito](https://aws.amazon.com/cognito/) · [Route53](https://aws.amazon.com/route53/) · [ACM](https://aws.amazon.com/certificate-manager/) · [KMS](https://aws.amazon.com/kms/) · [Secrets Manager](https://aws.amazon.com/secrets-manager/)
+**Mail** : [Postfix](http://www.postfix.org/) · [Dovecot](https://www.dovecot.org/) · [OpenDKIM](http://www.opendkim.org/) · [OpenDMARC](https://www.dmarc.org/) · [policyd-spf](http://www.policyd.org/) · [Amazon SES](https://aws.amazon.com/ses/)
+**CI/CD** : [GitHub Actions](https://github.com/features/actions) with [OIDC](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect) (no long-lived AWS keys)
+
+## AWS services — and why each one
+
+Everything below is provisioned by Terraform: **165 managed resources across 16 modules**, no console clicking. The interesting part isn't the list — it's why each service beat the alternative.
+
+### Compute
+
+| Service | Role here | Why this |
+|---|---|---|
+| **ECS Fargate** | Runs the FastAPI inference service (0.5 vCPU / 1 GB) | The API is stateless and traffic is intermittent. Fargate means no EC2 fleet to patch or autoscale for something that idles most of the day. |
+| **ECR** | Container registry, with a lifecycle policy ageing out old images | Keeps image pulls inside the VPC via endpoints. The lifecycle rule exists because untagged layers accumulate silently and are billed. |
+| **EC2** (`t3.small`) | Postfix + Dovecot mail server on Rocky Linux 9 | Postfix needs port 25 and persistent mailbox state. Containerising it adds real complexity for no practical gain — see [ADR-0004](docs/adr/0004-aws-deployment.md). |
+| **Elastic IP** | Static address for the mail server | Learned the hard way: an auto-assigned IP changes on every stop/start, which silently breaks inbound mail (MX → A no longer resolves to you) and leaves SPF's `a`/`mx` mechanisms authorising an address AWS has already given to someone else. |
+
+### Networking
+
+| Service | Role here | Why this |
+|---|---|---|
+| **VPC** | Custom `10.20.0.0/16`, public + private subnets across two AZs | Private subnets for the API and database; only the ALB and mail server are reachable from the internet. |
+| **ALB** ×2 | Public (dashboard → API) and internal (mail server → API) | Splitting them means the mail filter's path to the API is never internet-reachable. The internal ALB costs ~$3.78/week for exactly that isolation. |
+| **VPC endpoints** ×6 | ECR (api + dkr), CloudWatch Logs, Secrets Manager, Cognito, S3 gateway | Lets private subnets reach AWS APIs **without a NAT gateway**. Roughly the same price as NAT, but no single point of egress failure. |
+| **Route 53** | Four delegated subdomain zones under `naratech.xyz` | The apex lives in a different account, so each subdomain is delegated rather than the whole domain being moved. |
+| **ACM** | TLS certificates for the ALB and both Amplify domains | Auto-renewing and free; the alternative is remembering to rotate certs by hand. |
+
+### Data
+
+| Service | Role here | Why this |
+|---|---|---|
+| **RDS PostgreSQL 16** | Detection history with full provenance per verdict | The data is relational and the dashboard queries it by source, verdict and date. Managed snapshots and point-in-time restore matter more than the cost saving of self-hosting — a KMS outage once put this instance into an unrecoverable state, and only the automated snapshots brought it back. |
+| **S3** ×6 | Datasets, model artifacts, application logs, avatars, boot scripts, security logs | Every bucket is versioned, SSE-encrypted, public access blocked, with lifecycle rules. Model artifacts live here rather than in the image so a retrain doesn't require a redeploy. |
+
+### Identity & secrets
+
+| Service | Role here | Why this |
+|---|---|---|
+| **Cognito** | User pool + identity pool + three role groups for the dashboard | Analyst RBAC without hand-rolling auth. Hand-rolled session handling is where this kind of project usually grows its worst vulnerability. |
+| **Secrets Manager** ×3 | DB credentials, JWT signing key, SES SMTP credentials | Injected into the ECS task at runtime, so nothing sensitive is baked into an image or a Terraform variable file. |
+| **KMS** | Customer-managed keys for S3, RDS and log encryption | Explicit key ownership and rotation rather than relying on AWS-managed defaults. |
+| **IAM** | 8 roles + a GitHub OIDC provider | CI assumes a role via OIDC, so **there are no long-lived AWS access keys in GitHub at all** — the credential that can't leak is the one that doesn't exist. |
+
+### Email delivery
+
+| Service | Role here | Why this |
+|---|---|---|
+| **SES** | Outbound relay on :587, with Easy DKIM signing | AWS blocks outbound TCP/25 from EC2, and a new domain has no sending reputation — Gmail would reject us on both counts. SES owns the IP reputation and DKIM-signs on the way out, so mail still comes from our own domain. Inbound DKIM/DMARC verification stays on the mail server (OpenDKIM in verify-only mode). |
+
+### Security & observability
+
+| Service | Role here | Why this |
+|---|---|---|
+| **WAF v2** | Three rule groups on the public ALB, with logging | The dashboard and API are the only internet-facing surfaces; this is the cheapest layer in front of them. |
+| **CloudTrail** | API audit trail into a dedicated security-logs bucket | Separate bucket so log retention and access are governed independently of application data. |
+| **AWS Config** | Configuration recorder + delivery channel | Catches drift applied outside Terraform, which is exactly the change nobody remembers making. |
+| **CloudWatch** | 4 log groups, 5 alarms, Container Insights | Alarms on ALB 5xx, p95 latency, RDS CPU and connections, and WAF blocks. |
+| **SNS** | Alarm fan-out | One topic so alarm routing is changed in a single place. |
+| **EventBridge Scheduler** | Nightly data-retention purge task | Enforces the retention policy in [Data Retention & Privacy](docs/data-retention-privacy.md) automatically, rather than as a documented intention. |
+
+### Frontend hosting
+
+| Service | Role here | Why this |
+|---|---|---|
+| **Amplify Hosting** | React SPA, two branches (`dev` / `naratech`) with custom domains | Git-driven builds and a live environment per branch, with no web server to run or patch. |
+
+> **Running cost:** roughly **$36/week** at on-demand list price. The largest single line is the six VPC interface endpoints, which exist to avoid a NAT gateway — a near-wash on price, chosen for the architecture rather than the bill.
 
 ## Repository structure
 
@@ -174,7 +249,9 @@ Conventional Commits — `fix(rds):`, `feat(api):`, `chore(ci):`. Explain *why* 
 
 ## Status
 
-Actively developed. The system runs on AWS with the dashboard, inference API, and mail server all live. Known trade-offs — including the CI role's broad permissions and compliance being treated as documentation rather than a build target — are tracked openly in [Security Decisions](docs/security-decisions.md).
+Actively developed. The system runs on AWS with the dashboard, inference API, and mail server all live — though the hosted environment is scheduled for teardown on **1 September 2026** for cost reasons (see the note at the top). The code and Terraform remain complete and redeployable after that.
+
+Known trade-offs — including the CI role's broad permissions and compliance being treated as documentation rather than a build target — are tracked openly in [Security Decisions](docs/security-decisions.md).
 
 ## License
 
