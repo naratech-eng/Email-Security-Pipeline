@@ -45,7 +45,19 @@ resource "aws_db_instance" "this" {
   performance_insights_enabled          = true                      # CKV_AWS_353
   performance_insights_retention_period = 7                         # 7 days = free tier
 
-  backup_retention_period = 1 # free-tier max is 1; set to 7 on paid account
+  # 7 days, not 1. The old comment claimed free tier caps retention at 1 day --
+  # it does not. Free tier grants 20 GB of *backup storage*; the retention
+  # period is unconstrained, and this instance's backups are far under that.
+  #
+  # This is not a theoretical setting. On 2026-08-13 a KMS outage during the
+  # account suspension pushed esp-postgres into terminal
+  # inaccessible-encryption-credentials, and recovery depended entirely on
+  # whatever automated snapshots happened to still exist. At retention = 1 the
+  # newest usable snapshot was already a week stale, and it survived only
+  # because backups had stopped when the instance broke. One more day of
+  # working backups would have aged it out and the database would have been
+  # unrecoverable.
+  backup_retention_period = 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "Mon:04:00-Mon:05:00"
 
