@@ -11,7 +11,7 @@
 | Decision | Why | Detail |
 |---|---|---|
 | Two auth paths on the inference API: static signed token (mail filter) or Cognito access token (dashboard) | The mail filter is a server-to-server caller with no human to log in; the dashboard has real analysts. One `require_auth` dependency handles both rather than two separate auth stacks | `backend/main.py` `require_auth`, M9-T1 |
-| Static pre-shared key for milter→API, not mTLS or short-lived tokens | Accepted capstone-scope simplification. mTLS/short-lived tokens were the original `SEC-T1` framing; a long-lived key rotated via Secrets Manager was judged sufficient given the internal-ALB-only network path (not internet-reachable) | `docs/threat-model.md` §3 ("Unauthenticated calls to the inference API") |
+| Static pre-shared key for milter→API, not mTLS or short-lived tokens | Accepted scope simplification. mTLS/short-lived tokens were the original `SEC-T1` framing; a long-lived key rotated via Secrets Manager was judged sufficient given the internal-ALB-only network path (not internet-reachable) | `docs/threat-model.md` §3 ("Unauthenticated calls to the inference API") |
 | Detection row attribution comes from the verified caller identity, never a client-supplied field | A client-supplied `source`/`submitted_by` let any authenticated caller (or a fuzzer with a valid token) write into the wrong feed under any name — tightened after finding this during M7 | `backend/main.py` `derive_provenance`, M7-T13 |
 | Dashboard requires Cognito login; no anonymous access to any protected route | Standard SPA auth gating (`RequireAuth`) | `frontend/src/auth/guards.tsx`, M9-T1 |
 
@@ -31,7 +31,7 @@
 |---|---|---|
 | All runtime secrets (DB credentials, JWT signing key, SES SMTP creds) in Secrets Manager, injected as env vars at container/instance startup — never committed | Standard secrets hygiene | SEC-T3 |
 | CI→AWS via GitHub OIDC + IAM role, no static AWS keys anywhere | No long-lived cloud credentials to leak from CI | `infra/modules/github_oidc`, `docs/devsecops.md` §5 |
-| CI role has `AdministratorAccess`, not a scoped least-privilege policy | Explicit, acknowledged capstone-lab trade-off — CI needs to apply every module in a single lab account; the role is still OIDC-gated to this repo only. Flagged for tightening before any real deployment | `infra/modules/github_oidc/main.tf` (inline `#checkov:skip=CKV_AWS_274`) |
+| CI role has `AdministratorAccess`, not a scoped least-privilege policy | Explicit, acknowledged lab trade-off — CI needs to apply every module in a single lab account; the role is still OIDC-gated to this repo only. Flagged for tightening before any real deployment | `infra/modules/github_oidc/main.tf` (inline `#checkov:skip=CKV_AWS_274`) |
 | GitHub native secret scanning (push protection) is the enforced gate; gitleaks (full git-history scan) is not yet implemented | Real, acknowledged gap versus the intended defense-in-depth — not glossed over | `docs/devsecops.md` §3.2 |
 
 ## 4. Data Handling & Privacy
@@ -41,7 +41,7 @@
 | Raw email body/attachment content is never persisted to the `detections` table — only subject, addresses, extracted URLs, and 5 numeric features | Deliberate privacy/storage decision made at the schema level, before M9 even started | `backend/migrations/versions/28d446b7b47d_...py`, verified against `mime_parser.body_features()` |
 | 180-day retention on the `detections` table, enforced by a daily scheduled purge | Balances dashboard history/trend value against unbounded accumulation of personal data (subject lines, addresses) with no operational purpose past a few months | M9-T7, `docs/data-retention-privacy.md` |
 | RDS encrypted at rest (KMS) and in transit, private-subnet + SG isolated, IAM DB auth | Standard data-at-rest/in-transit protection for the one table that holds anything sensitive | M7 infra |
-| Compliance is treated as a documentation exercise for the capstone, not a build target | No regulated real-user data is processed; a real deployment would need actual GDPR/PIPEDA compliance work (legal basis review, subject access/deletion process, breach notification) that this project explicitly does not build | `docs/threat-model.md` §5, `docs/data-retention-privacy.md` §4 |
+| Compliance is treated as a documentation exercise, not a build target | No regulated real-user data is processed; a real deployment would need actual GDPR/PIPEDA compliance work (legal basis review, subject access/deletion process, breach notification) that this project explicitly does not build | `docs/threat-model.md` §5, `docs/data-retention-privacy.md` §4 |
 
 ## 5. Monitoring & Detection
 

@@ -3,9 +3,8 @@
 | Field | Value |
 |---|---|
 | Project | Email Security Pipeline — Phishing Email & Malicious URL Classifier |
-| Course | CYT300 Capstone |
 | Status | Draft v1.0 |
-| Owners | Project Lead + Capstone Team (5 members) |
+| Owners | Project Lead + core team (5 members) |
 | Repo | https://github.com/naratech-eng/Email-Security-Pipeline |
 
 ## 1. Problem Statement
@@ -39,7 +38,7 @@ Phishing emails and malicious URLs remain a leading initial-access vector for cr
 | Mail Server Admin (Alex) | Runs Rocky Linux mail server on EC2 | Clean integration, logs, easy rollback, IaC-managed config |
 | Cloud Engineer (Jordan) | Owns AWS account, Terraform, CI/CD pipeline | Reproducible infra, security baselines, low cost |
 | End User (Riley) | Sends/receives email | Legitimate mail must still arrive on time |
-| Capstone Reviewer | Grades the project | Reproducible setup, clear docs, evidence of testing |
+| Technical Reviewer | Evaluates the project | Reproducible setup, clear docs, evidence of testing |
 
 ## 5. User Stories (high level)
 
@@ -87,7 +86,7 @@ Phishing emails and malicious URLs remain a leading initial-access vector for cr
 
 ## 8. Assumptions
 
-- We have an AWS account with admin rights for the duration of the capstone.
+- We have an AWS account with admin rights for the duration of the project.
 - A spending limit / budget alert is configured to avoid runaway cost.
 - Public datasets (Kaggle phishing corpus, PhishTank, OpenPhish, Enron) are usable for academic purposes.
 - Team has Python, basic Linux admin, and basic AWS skills; one member owns Terraform.
@@ -96,7 +95,7 @@ Phishing emails and malicious URLs remain a leading initial-access vector for cr
 
 ## 9. Constraints
 
-- 8–10 week delivery window (capstone schedule).
+- 8–10 week delivery window.
 - 4–6 person team with mixed roles.
 - All infrastructure must be reproducible via Terraform from the repo.
 - All code and docs are public on GitHub.
@@ -123,7 +122,6 @@ Phishing emails and malicious URLs remain a leading initial-access vector for cr
 
 ## 12. References
 
-- Course handbook & milestone guide (`milestone-guide.md`)
 - Project brief (`project-details.md`)
 - Notion workspace: https://www.notion.so/361ee3d2d2cf811890e3c6ea307645f3
 - Repo: https://github.com/naratech-eng/Email-Security-Pipeline

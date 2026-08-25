@@ -1,6 +1,6 @@
 # Threat Model (STRIDE)
 
-This threat model covers the Email Security Pipeline at the level expected for the CYT300 capstone Milestone 9 deliverable (M9-T3, PRD S-06). It is not an exhaustive enterprise threat model, but it does identify the most relevant risks and mitigations, and traces every Must control to the task that implements it.
+This threat model covers the Email Security Pipeline at the level expected for the Milestone 9 deliverable (M9-T3, PRD S-06). It is not an exhaustive enterprise threat model, but it does identify the most relevant risks and mitigations, and traces every Must control to the task that implements it.
 
 **Last synced to the as-built architecture:** 2026-08-04, after M9-T0/T1/T2/T4/T5 landed. Earlier versions of this doc described a single "CentOS VM" hosting everything — that was the original design sketch, not what shipped. The system is actually split across a Rocky Linux mail EC2 instance, ECS Fargate (inference API), RDS Postgres, Cognito, and an Amplify-hosted React dashboard; the diagram and tables below reflect that.
 
@@ -99,9 +99,9 @@ Trust boundaries:
 - [ ] OS packages on the mail EC2 patched on an ongoing cadence — `package_update`/`package_upgrade` run once at boot (cloud-init), no `dnf-automatic` or equivalent afterward
 - [ ] **This document reviewed by the team** — M9-T3's own acceptance criterion; pending as of this sync
 
-## 5. Compliance Notes (Capstone Scope)
+## 5. Compliance Notes (Current Scope)
 
-For the capstone, we treat compliance as a documentation exercise:
+For now, we treat compliance as a documentation exercise:
 - We do not handle regulated personal data of real users.
 - We acknowledge that a production deployment would need to consider GDPR / PIPEDA / sector-specific requirements before processing real user mail — see `docs/data-retention-privacy.md` (M9-T7) for what's implemented (a 180-day metadata purge) versus what a real deployment would still need (legal basis review, subject access/deletion requests, breach notification).
 - Datasets used are publicly available and used for academic purposes only.
