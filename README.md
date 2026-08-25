@@ -98,13 +98,54 @@ Promotion to the protected branch is gated on a clean nightly DAST run. Trade-of
 
 See [DevSecOps](docs/devsecops.md) and [Threat Model](docs/threat-model.md).
 
+## CI/CD workflows
+
+Twelve GitHub Actions workflows. All AWS access is via **OIDC role assumption** — there are no long-lived AWS keys stored in GitHub.
+
+### On every pull request — the merge gates
+
+| Workflow | What it does |
+|---|---|
+| [`terraform-pr.yml`](.github/workflows/terraform-pr.yml) | `fmt` → `validate` → tfsec → Checkov, then a real `terraform plan` posted as a PR comment so the blast radius is visible before merge. Runs unconditionally rather than behind a `paths:` filter — a path-filtered trigger never runs at all on non-infra PRs, leaving required checks stuck "waiting" forever. A `changes` job decides whether to do real work instead. |
+| [`sast.yml`](.github/workflows/sast.yml) | Eight jobs: actionlint, Bandit + pip-audit, npm audit + ESLint + Vitest, Semgrep, gitleaks, CodeQL, and an aggregating gate that fails if any blocking child failed. One red check instead of hunting through eight. |
+| [`backend-tests.yml`](.github/workflows/backend-tests.yml) | pytest, scoped by path to `backend/**` and the shared feature-extraction module. |
+| [`backend-image-scan.yml`](.github/workflows/backend-image-scan.yml) | Builds the container and Trivy-scans it *before* merge, so a vulnerable base image is caught while the change is still cheap to revert. |
+| [`sonarcloud.yml`](.github/workflows/sonarcloud.yml) | Quality gate — maintainability and reliability treated as security properties, not cosmetics. |
+
+### On merge to `dev` — continuous deployment
+
+| Workflow | What it does |
+|---|---|
+| [`terraform-apply.yml`](.github/workflows/terraform-apply.yml) | Auto-applies any `infra/**` change. **Merging to `dev` changes live infrastructure** — worth knowing before you approve a PR. |
+| [`backend-deploy.yml`](.github/workflows/backend-deploy.yml) | Build → Trivy scan → push to ECR → roll the ECS task definition. The scan sits *between* build and push, so a failing image never reaches the registry. |
+| [`dast-baseline.yml`](.github/workflows/dast-baseline.yml) | Chained off `Backend Deploy` completing via `workflow_run`, so the ZAP baseline always hits the build that was just deployed rather than whatever happened to be live. |
+
+### Nightly
+
+| Workflow | What it does |
+|---|---|
+| [`dast-nightly.yml`](.github/workflows/dast-nightly.yml) | 08:00 UTC, five jobs against the running system: ZAP active scan, Schemathesis API fuzzing, testssl.sh against both the ALB and the mail server, swaks relay/spoof-rejection tests, and a gate that aggregates them. This is the job that catches things unit tests structurally cannot — it found anonymous TLS ciphers offered on SMTP submission, where an attacker positioned to MITM could have read SASL credentials. |
+
+### Promotion and release
+
+| Workflow | What it does |
+|---|---|
+| [`naratech-promotion-gate.yml`](.github/workflows/naratech-promotion-gate.yml) | Blocks promotion to `naratech` unless the most recent nightly DAST run passed. Deliberately reads the latest completed run on *any* branch: filtering to one branch returns zero runs, falls through to the "nothing to gate on" path, and silently passes — defeating the gate. |
+| [`release.yml`](.github/workflows/release.yml) | Derives the next semver from Conventional Commit subjects since the last tag, then tags and publishes release notes. Docs/chore-only merges deliberately cut **no** release — otherwise a documentation tweak would mint a version whose notes say nothing happened. |
+
+### Manual
+
+| Workflow | What it does |
+|---|---|
+| [`zap-dashboard-auth.yml`](.github/workflows/zap-dashboard-auth.yml) | ZAP scan of the dashboard from *behind* Cognito authentication. Manual-only, because it needs a live session and will generate real detection records. |
+
 ## Tech stack
 
-**Backend** : [FastAPI](https://fastapi.tiangolo.com/) · [Python 3.13](https://www.python.org/) · [scikit-learn](https://scikit-learn.org/) · [psycopg 3](https://www.psycopg.org/) · [Alembic](https://alembic.sqlalchemy.org/)
-**Frontend** : [React 19](https://react.dev/) · [Vite 8](https://vitejs.dev/) · [Tailwind](https://tailwindcss.com/) · [AWS Amplify Hosting](https://aws.amazon.com/amplify/)
-**Data** : [PostgreSQL 16](https://www.postgresql.org/) (RDS) · [S3](https://aws.amazon.com/s3/) (datasets, models, logs)
-**Infra** : [Terraform 1.10](https://www.terraform.io/) · [ECS Fargate](https://aws.amazon.com/ecs/fargate/) · [ALB](https://aws.amazon.com/elasticloadbalancing/) · [Cognito](https://aws.amazon.com/cognito/) · [Route53](https://aws.amazon.com/route53/) · [ACM](https://aws.amazon.com/certificate-manager/) · [KMS](https://aws.amazon.com/kms/) · [Secrets Manager](https://aws.amazon.com/secrets-manager/)
-**Mail** : [Postfix](http://www.postfix.org/) · [Dovecot](https://www.dovecot.org/) · [OpenDKIM](http://www.opendkim.org/) · [OpenDMARC](https://www.dmarc.org/) · [policyd-spf](http://www.policyd.org/) · [Amazon SES](https://aws.amazon.com/ses/)
+**Backend** : [FastAPI](https://fastapi.tiangolo.com/) · [Python 3.13](https://www.python.org/) · [scikit-learn](https://scikit-learn.org/) · [psycopg 3](https://www.psycopg.org/) · [Alembic](https://alembic.sqlalchemy.org/) <br/>
+**Frontend** : [React 19](https://react.dev/) · [Vite 8](https://vitejs.dev/) · [Tailwind](https://tailwindcss.com/) · [AWS Amplify Hosting](https://aws.amazon.com/amplify/) <br/>
+**Data** : [PostgreSQL 16](https://www.postgresql.org/) (RDS) · [S3](https://aws.amazon.com/s3/) (datasets, models, logs) <br/>
+**Infra** : [Terraform 1.10](https://www.terraform.io/) · [ECS Fargate](https://aws.amazon.com/ecs/fargate/) · [ALB](https://aws.amazon.com/elasticloadbalancing/) · [Cognito](https://aws.amazon.com/cognito/) · [Route53](https://aws.amazon.com/route53/) · [ACM](https://aws.amazon.com/certificate-manager/) · [KMS](https://aws.amazon.com/kms/) · [Secrets Manager](https://aws.amazon.com/secrets-manager/) <br/>
+**Mail** : [Postfix](http://www.postfix.org/) · [Dovecot](https://www.dovecot.org/) · [OpenDKIM](http://www.opendkim.org/) · [OpenDMARC](https://www.dmarc.org/) · [policyd-spf](http://www.policyd.org/) · [Amazon SES](https://aws.amazon.com/ses/) <br/>
 **CI/CD** : [GitHub Actions](https://github.com/features/actions) with [OIDC](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect) (no long-lived AWS keys)
 
 ## AWS services — and why each one
