@@ -80,6 +80,33 @@ postconf -e "milter_protocol = 6"
 postconf -e "smtpd_milters = inet:127.0.0.1:8891 inet:127.0.0.1:8893"
 postconf -e "non_smtpd_milters = "
 
+# TLS cipher hardening. Postfix ships with anonymous (aNULL) ciphers enabled,
+# which is a deliberate upstream choice for opportunistic MTA-to-MTA TLS on
+# port 25 -- unauthenticated encryption still beats cleartext there. It is not
+# acceptable on submission (587), where clients hand over SASL passwords:
+# aNULL gives encryption with no server authentication, so anyone positioned to
+# MITM can negotiate it and read the credentials off the wire.
+#
+# Setting smtpd_tls_security_level=encrypt on the submission service (see
+# master.cf in cloud-init) does NOT drop these -- the exclusion has to be
+# explicit, and the mandatory_* variants are what apply once the level is
+# `encrypt`. testssl.sh raised 16 HIGH/CRITICAL findings on 587 for exactly
+# this and blocked promotion to naratech until it was fixed.
+#
+# Lives here rather than in cloud-init because user_data is already at ~15.9KB
+# of EC2's hard 16384-byte cap, and because editing cloud-init sets
+# user_data_replace_on_change and would rebuild the whole mail server.
+TLS_EXCLUDE="aNULL, eNULL, EXPORT, DES, RC4, MD5, PSK, SRP, 3DES"
+postconf -e "smtpd_tls_exclude_ciphers = $TLS_EXCLUDE"
+postconf -e "smtpd_tls_mandatory_exclude_ciphers = $TLS_EXCLUDE"
+postconf -e "smtpd_tls_mandatory_ciphers = high"
+# Without this the client picks the cipher, which testssl.sh reports as
+# "NOT a server cipher order configured".
+postconf -e "tls_preempt_cipherlist = yes"
+postconf -e "smtpd_tls_protocols = >=TLSv1.2"
+postconf -e "smtpd_tls_mandatory_protocols = >=TLSv1.2"
+
 systemctl enable --now opendkim opendmarc
 
 echo "setup-mail-auth.sh: opendkim/opendmarc/policyd-spf configured for inbound SPF/DKIM/DMARC"
+echo "setup-mail-auth.sh: TLS cipher hardening applied (aNULL excluded, server cipher order enforced)"
