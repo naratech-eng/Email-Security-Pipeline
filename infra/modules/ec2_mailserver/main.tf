@@ -180,7 +180,8 @@ resource "aws_iam_instance_profile" "ssm" {
   role = aws_iam_role.ssm.name
 }
 
-# EC2 instance — auto-assigned public IP (no EIP)
+# EC2 instance — public IP comes from the Elastic IP below, not the
+# auto-assigned one (which changes on every stop/start).
 resource "aws_instance" "mail" {
   #checkov:skip=CKV_AWS_88: Mail server requires a public IP to receive SMTP and present an MX endpoint
   #checkov:skip=CKV_AWS_126: Detailed (1-min) monitoring adds CloudWatch cost; default 5-min metrics suffice for the lab
@@ -242,14 +243,27 @@ resource "aws_instance" "mail" {
   }
 }
 
-# Route53 A record: mail.naratech.xyz → EC2 public IP
-# Note: IP changes on stop/start — run terraform apply again to update
+# Elastic IP so the address survives stop/start. Without this the instance got
+# a fresh auto-assigned IP on every restart, which silently broke inbound mail:
+# the MX points at mail.naratech.xyz, whose A record still held the old address,
+# and it also left the SPF "a mx" mechanisms authorising an IP AWS had already
+# handed to someone else.
+resource "aws_eip" "mail" {
+  instance = aws_instance.mail.id
+  domain   = "vpc"
+
+  tags = {
+    Name = "${var.project}-mail-server"
+  }
+}
+
+# Route53 A record: mail.naratech.xyz → the Elastic IP (stable across restarts).
 resource "aws_route53_record" "mail_a" {
   zone_id = var.mail_zone_id
   name    = var.mail_hostname
   type    = "A"
   ttl     = 300
-  records = [aws_instance.mail.public_ip]
+  records = [aws_eip.mail.public_ip]
 }
 
 # M7-T6 — self-referencing MX so external mail (Gmail, etc.) can actually
