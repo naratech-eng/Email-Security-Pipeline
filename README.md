@@ -5,7 +5,7 @@
 
 <div align="center">
 
-[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/) [![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org/) [![Terraform](https://img.shields.io/badge/Terraform-1.10-7B42BC?logo=terraform&logoColor=white)](https://www.terraform.io/) <br/> [![AWS](https://img.shields.io/badge/AWS-ECS%20%7C%20RDS%20%7C%20Amplify-232F3E?logo=amazonwebservices&logoColor=white)](https://aws.amazon.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Docker](https://img.shields.io/badge/Docker-ECS%20Fargate-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/) [![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org/) [![Terraform](https://img.shields.io/badge/Terraform-1.10-7B42BC?logo=terraform&logoColor=white)](https://www.terraform.io/) <br/> [![AWS](https://img.shields.io/badge/AWS-ECS%20%7C%20RDS%20%7C%20Amplify-232F3E?logo=amazonwebservices&logoColor=white)](https://aws.amazon.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Docker](https://img.shields.io/badge/Docker-ECS%20Fargate-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 </div>
 
 <div align="center">
@@ -102,6 +102,9 @@ See [DevSecOps](docs/devsecops.md) and [Threat Model](docs/threat-model.md).
 
 Twelve GitHub Actions workflows. All AWS access is via **OIDC role assumption** — there are no long-lived AWS keys stored in GitHub.
 
+<details>
+<summary><b>Show all 12 workflows</b></summary>
+
 ### On every pull request — the merge gates
 
 | Workflow | What it does |
@@ -139,6 +142,8 @@ Twelve GitHub Actions workflows. All AWS access is via **OIDC role assumption** 
 |---|---|
 | [`zap-dashboard-auth.yml`](.github/workflows/zap-dashboard-auth.yml) | ZAP scan of the dashboard from *behind* Cognito authentication. Manual-only, because it needs a live session and will generate real detection records. |
 
+</details>
+
 ## Tech stack
 
 **Backend** : [FastAPI](https://fastapi.tiangolo.com/) · [Python 3.13](https://www.python.org/) · [scikit-learn](https://scikit-learn.org/) · [psycopg 3](https://www.psycopg.org/) · [Alembic](https://alembic.sqlalchemy.org/) <br/>
@@ -151,6 +156,9 @@ Twelve GitHub Actions workflows. All AWS access is via **OIDC role assumption** 
 ## AWS services — and why each one
 
 Everything below is provisioned by Terraform: **165 managed resources across 16 modules**, no console clicking. The interesting part isn't the list — it's why each service beat the alternative.
+
+<details>
+<summary><b>Show every AWS service and why it was chosen</b></summary>
 
 ### Compute
 
@@ -211,6 +219,8 @@ Everything below is provisioned by Terraform: **165 managed resources across 16 
 | **Amplify Hosting** | React SPA, two branches (`dev` / `naratech`) with custom domains | Git-driven builds and a live environment per branch, with no web server to run or patch. |
 
 > **Running cost:** roughly **$36/week** at on-demand list price. The largest single line is the six VPC interface endpoints, which exist to avoid a NAT gateway — a near-wash on price, chosen for the architecture rather than the bill.
+
+</details>
 
 ## Repository structure
 
@@ -295,4 +305,4 @@ Known trade-offs — including the CI role's broad permissions and compliance be
 
 ## License
 
-No license file is present yet, which under default copyright means all rights are reserved and others may not reuse this code. If you want it to be usable or forkable, add a `LICENSE` (MIT and Apache-2.0 are the usual choices).
+Released under the [MIT License](LICENSE) — free to use, modify and distribute, with attribution and no warranty.

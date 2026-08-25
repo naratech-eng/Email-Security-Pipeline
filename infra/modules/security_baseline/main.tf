@@ -132,6 +132,25 @@ resource "aws_s3_bucket_policy" "security_logs" {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
         }
       },
+      # Everything above grants access; this denies the insecure way of using
+      # it. S3 accepts plain HTTP unless a policy refuses it, and Deny beats
+      # Allow, so this closes the gap for every principal at once rather than
+      # per-statement. It matters more here than on a normal bucket: this one
+      # holds the CloudTrail and Config record, which is exactly the evidence
+      # an attacker would want to read or tamper with in transit.
+      {
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.security_logs.arn,
+          "${aws_s3_bucket.security_logs.arn}/*",
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
+      },
     ]
   })
 }
