@@ -19,7 +19,7 @@
 # backend-tests.yml's integration tests load the REAL S3 models -- do not
 # merge a PR touching this file until that workflow is green.
 fastapi==0.141.1
-uvicorn[standard]==0.52.1
+uvicorn[standard]==0.52.4
 pydantic==2.13.4
 boto3==1.43.64
 pyjwt[crypto]==2.13.0    # M7-T14 — verify Cognito access-token JWTs against JWKS
